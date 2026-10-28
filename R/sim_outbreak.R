@@ -91,7 +91,8 @@ sim_outbreak <- function(contact_distribution = function(x) stats::dpois(x = x, 
                            lost_to_followup = 0.2,
                            unknown = 0.1
                          ),
-                         config = create_config()) {
+                         config = create_config(),
+                         geography = NULL) {
   # check and convert distribution to func if needed before .check_sim_input()
   funcs <- as_function(
     list(
@@ -127,7 +128,8 @@ sim_outbreak <- function(contact_distribution = function(x) stats::dpois(x = x, 
     hosp_risk = hosp_risk,
     hosp_death_risk = hosp_death_risk,
     non_hosp_death_risk = non_hosp_death_risk,
-    population_age = population_age
+    population_age = population_age,
+    geography = geography
   )
   .cross_check_sim_input(
     onset_to_hosp = onset_to_hosp,
@@ -188,7 +190,8 @@ sim_outbreak <- function(contact_distribution = function(x) stats::dpois(x = x, 
     population_age = population_age,
     case_type_probs = case_type_probs,
     contact_tracing_status_probs = contact_tracing_status_probs,
-    config = config
+    config = config,
+    geography = geography
   )
 
   # return list of line list and contacts table

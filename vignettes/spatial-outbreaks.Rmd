@@ -1,0 +1,123 @@
+---
+title: "Spatial outbreaks"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Spatial outbreaks}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 8,
+  fig.height = 5
+)
+```
+
+::: {.alert .alert-info}
+If you are unfamiliar with the {simulist} package or the `sim_outbreak()` function [Get Started vignette](simulist.html) is a great place to start.
+:::
+
+This vignette shows how to simulate an outbreak across several locations, with movement between them, contact rates that differ between them, and interventions that reduce transmission in one location from a given date.
+
+::: {.alert .alert-secondary}
+
+With a geography, each individual in the branching process has a location of residence. The index case lives in a location chosen in proportion to population, or in a named `seed_location`. When an infected individual makes contacts, each contact's location is drawn from the mobility probabilities of the infector's location: with probability `prob_stay` they live in the same location, and otherwise in another location chosen by a mobility model. The number of contacts of an infected individual is thinned by the contact multiplier of their location. The probability of infection can be a function of the contact time and the contact's location.
+
+Locations do not have finite populations in this version, so the number of susceptible people does not fall as the outbreak grows. Location therefore changes where cases occur and how fast transmission is in each place, but an outbreak in a location does not slow because people there have been infected.
+
+:::
+
+```{r setup}
+library(simulist)
+```
+
+## Locations and mobility
+
+A geography is built from a `<data.frame>` of locations, with names, populations and planar coordinates in kilometres. Here, a central town has denser contact than its two neighbours.
+
+```{r, create-geography}
+locations <- data.frame(
+  name = c("North", "Central", "South"),
+  population = c(40000, 120000, 60000),
+  x = c(0, 3, 7),
+  y = c(5, 0, -2),
+  contact_multiplier = c(0.7, 1, 0.8)
+)
+
+geography <- create_geography(
+  locations,
+  mobility = mobility_gravity(kernel_km = 3),
+  prob_stay = 0.85,
+  seed_location = "Central"
+)
+geography
+```
+
+The mobility matrix gives the probability that a contact of someone in each row's location lives in each column's location. The gravity model makes nearby, larger locations more likely destinations.
+
+```{r, mobility}
+round(geography$mobility, 3)
+```
+
+`mobility_radiation()` is a parameter-free alternative, and any row-stochastic matrix can be supplied directly, for example one estimated from travel data.
+
+## Simulating a spatial outbreak
+
+```{r, sim-outbreak}
+set.seed(1)
+outbreak <- sim_outbreak(
+  contact_distribution = function(x) stats::dpois(x = x, lambda = 3),
+  prob_infection = 0.5,
+  outbreak_size = c(100, 2000),
+  geography = geography,
+  config = create_config(network = "unadjusted")
+)
+head(outbreak$linelist)
+table(outbreak$linelist$location)
+```
+
+The contacts table records where both people live, so movement along the transmission chain can be followed.
+
+```{r, contacts}
+head(outbreak$contacts[, c("from", "to", "was_case", "from_location", "to_location")])
+```
+
+## Interventions in one location
+
+`prob_infection` can be a function of `time` (days since the start of the outbreak) and `location`. `intervention_schedule()` builds one from a table of interventions. Here, transmission in the central town is halved from day 20, and transmission everywhere falls by a further 30% from day 40.
+
+```{r, interventions}
+prob_infection <- intervention_schedule(
+  base = 0.5,
+  interventions = data.frame(
+    location = c("Central", "all"),
+    start = c(20, 40),
+    end = c(Inf, Inf),
+    reduction = c(0.5, 0.3)
+  )
+)
+
+set.seed(1)
+outbreak <- sim_outbreak(
+  contact_distribution = function(x) stats::dpois(x = x, lambda = 3),
+  prob_infection = prob_infection,
+  outbreak_size = c(100, 2000),
+  geography = geography,
+  config = create_config(network = "unadjusted")
+)
+table(outbreak$linelist$location)
+```
+
+Any function with `time` and `location` arguments works, for example seasonal transmission or a probability that differs by location from the start. Without a geography, `location` is `NA`, so a function of `time` alone gives a time-varying reproduction number in a non-spatial outbreak.
+
+## Downstream functions
+
+`messy_linelist()`, `truncate_linelist()` and `censor_linelist()` accept line lists with a `location` column. `messy_linelist()` introduces spelling mistakes in location names along with the other `character` columns.
+
+```{r, messy}
+messy <- messy_linelist(outbreak$linelist, prop_spelling_mistakes = 0.2)
+head(sort(unique(messy$location)))
+```

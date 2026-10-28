@@ -73,7 +73,8 @@ sim_contacts <- function(contact_distribution = function(x) stats::dpois(x = x, 
                            lost_to_followup = 0.2,
                            unknown = 0.1
                          ),
-                         config = create_config()) {
+                         config = create_config(),
+                         geography = NULL) {
   # check and convert distribution to func if needed before .check_sim_input()
   stopifnot(
     "Input delay distributions need to be either functions or <epiparameter>" =
@@ -93,7 +94,8 @@ sim_contacts <- function(contact_distribution = function(x) stats::dpois(x = x, 
     outbreak_start_date = outbreak_start_date,
     outbreak_size = outbreak_size,
     contact_tracing_status_probs = contact_tracing_status_probs,
-    population_age = population_age
+    population_age = population_age,
+    geography = geography
   )
 
   if (is.data.frame(population_age)) {
@@ -113,7 +115,8 @@ sim_contacts <- function(contact_distribution = function(x) stats::dpois(x = x, 
     outbreak_size = outbreak_size,
     population_age = population_age,
     contact_tracing_status_probs = contact_tracing_status_probs,
-    config = config
+    config = config,
+    geography = geography
   )
 
   # return contacts table

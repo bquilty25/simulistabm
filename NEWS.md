@@ -1,5 +1,19 @@
 # simulist (development version)
 
+## New features
+
+* Spatial simulation. `sim_outbreak()`, `sim_linelist()` and `sim_contacts()` gain a `geography` argument. A geography from the new `create_geography()` gives every individual a location of residence, drawn along the transmission chain from mobility probabilities, with optional contact rates that differ between locations. The line list gains a `location` column and the contacts table gains `from_location` and `to_location` columns. Mobility can come from the new `mobility_gravity()` or `mobility_radiation()`, or from a matrix.
+
+* `prob_infection` can now be a function of `time` and `location`, so transmission can change over time and between locations. The new `intervention_schedule()` builds one for interventions that reduce transmission in some locations over some period.
+
+* `messy_linelist()`, `truncate_linelist()` and `censor_linelist()` accept line lists with a `location` column.
+
+* New `chain_to_outbreak()` turns a transmission chain simulated by any model (for example an agent-based model with households and finite populations) into a line list and contacts table with the same structure as `sim_outbreak()`, keeping the model's ages, sexes and locations when supplied. `sim_outbreak()` now uses the same internal step, so its output is unchanged.
+
+## Breaking changes
+
+* None. Without a `geography` and with a numeric `prob_infection`, simulations draw the same random numbers as before, so existing seeds reproduce existing outbreaks.
+
 # simulist 0.7.1
 
 * Minor fixes to _simulist_ JOSS paper for publication.

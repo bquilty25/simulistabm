@@ -18,19 +18,32 @@
 #' to their number of contacts. The plus one is because one of the contacts
 #' was "used" to infect the person.
 #'
+#' With a `geography` (see [create_geography()]), each individual also has a
+#' location. The number of contacts of an infected individual is thinned by
+#' the contact multiplier of their location, each contact's location is drawn
+#' from the mobility probabilities of that location, and `prob_infection` may
+#' be a function of the contact time and the contact's location. Contact times
+#' are drawn before infection in this case, so that the probability of
+#' infection can depend on them. Without a geography and with a numeric
+#' `prob_infection`, the random number stream is the same as without the
+#' spatial extension, so existing seeds reproduce existing outbreaks.
+#'
 #' @inheritParams sim_linelist
 #'
-#' @return A `<data.frame>` with the contact and transmission chain data.
+#' @return A `<data.frame>` with the contact and transmission chain data, with
+#' a `location` column when a `geography` is supplied.
 #' @keywords internal
 .sim_network_bp <- function(contact_distribution,
                             infectious_period,
                             prob_infection,
                             max_outbreak_size,
-                            config) {
+                            config,
+                            geography = NULL) {
   if (is.null(config$network) ||
       !config$network %in% c("adjusted", "unadjusted")) {
     stop("Network incorrectly specified, check config", call. = FALSE)
   }
+  spatial <- !is.null(geography) || is.function(prob_infection)
 
   # initialise data object
   ancestor <- vector(mode = "integer", 1e5)
@@ -44,6 +57,19 @@
   # 1 is infected, 0 is non-infected contact
   infected[1] <- 1L
   time_vec[1] <- 0
+
+  if (!is.null(geography)) {
+    locations <- geography$locations
+    location_names <- locations$name
+    contact_multiplier <- locations$contact_multiplier
+    cum_mobility <- t(apply(geography$mobility, 1, cumsum))
+    location <- vector(mode = "integer", 1e5)
+    location[1] <- if (is.null(geography$seed_location)) {
+      sample.int(nrow(locations), size = 1, prob = locations$population)
+    } else {
+      match(geography$seed_location, location_names)
+    }
+  }
 
   # initialise counters
   next_gen_size <- 1L
@@ -75,8 +101,63 @@
       chain_length <- chain_length + any(contacts >= 1L)
       chain_generation <- chain_generation + 1L
 
+      if (!is.null(geography)) {
+        # fewer contacts in locations with a lower contact rate
+        contacts <- stats::rbinom(
+          n = length(contacts),
+          size = contacts,
+          prob = contact_multiplier[location[ancestor_idx]]
+        )
+      }
+
       for (i in seq_along(contacts)) {
-        if (contacts[i] > 0) {
+        if (contacts[i] > 0 && spatial) {
+          vec_idx <-
+            which.min(generation):(which.min(generation) + contacts[i] - 1)
+          if (max(vec_idx) >= length(generation)) {
+            ancestor <- c(ancestor, vector(mode = "integer", 1e5))
+            generation <- c(generation, vector(mode = "integer", 1e5))
+            infected <- c(infected, vector(mode = "integer", 1e5))
+            time_vec <- c(time_vec, vector(mode = "double", 1e5))
+            if (!is.null(geography)) {
+              location <- c(location, vector(mode = "integer", 1e5))
+            }
+          }
+          generation[vec_idx] <- chain_generation
+          ancestor[vec_idx] <- ancestor_idx[i]
+
+          # contact times first, so the probability of infection can use them
+          contact_infectious_period <- .sample_infectious_period(
+            infectious_period = infectious_period
+          )
+          contact_times <- stats::runif(
+            n = length(vec_idx),
+            min = 0,
+            max = contact_infectious_period
+          ) + time_vec[ancestor_idx[i]]
+          time_vec[vec_idx] <- contact_times
+
+          contact_location <- NA_character_
+          if (!is.null(geography)) {
+            from <- location[ancestor_idx[i]]
+            location[vec_idx] <- findInterval(
+              stats::runif(length(vec_idx)),
+              cum_mobility[from, ],
+              rightmost.closed = TRUE
+            ) + 1L
+            # guard against floating point totals just below 1
+            location[vec_idx] <- pmin(location[vec_idx], length(location_names))
+            contact_location <- location_names[location[vec_idx]]
+          }
+
+          prob <- if (is.function(prob_infection)) {
+            .eval_prob_infection(prob_infection, contact_times, rep_len(contact_location, length(vec_idx)))
+          } else {
+            prob_infection
+          }
+          infect <- stats::rbinom(n = length(vec_idx), size = 1, prob = prob)
+          infected[vec_idx] <- as.numeric(infect)
+        } else if (contacts[i] > 0) {
           # vec index can be which.min of either generation or ancestor vec
           vec_idx <-
             which.min(generation):(which.min(generation) + contacts[i] - 1)
@@ -143,11 +224,39 @@
   time_vec <- time_vec[seq_along(generation)]
 
   # return chain as <data.frame>
-  data.frame(
+  chain <- data.frame(
     id = id,
     ancestor = ancestor,
     generation = generation,
     infected = infected,
     time = time_vec
   )
+  if (!is.null(geography)) {
+    chain$location <- location_names[location[seq_along(generation)]]
+  }
+  chain
+}
+
+#' Evaluate a time- and location-dependent probability of infection
+#'
+#' @param prob_infection A `function` with arguments `time` and `location`.
+#' @param time A `numeric` vector of contact times.
+#' @param location A `character` vector of contact locations (`NA` without a
+#' geography).
+#'
+#' @return A `numeric` vector of probabilities, one per contact.
+#' @keywords internal
+.eval_prob_infection <- function(prob_infection, time, location) {
+  prob <- prob_infection(time = time, location = location)
+  valid <- checkmate::test_numeric(
+    prob, lower = 0, upper = 1, any.missing = FALSE, len = length(time)
+  )
+  if (!valid) {
+    stop(
+      "`prob_infection` must return one probability between 0 and 1 for ",
+      "each contact.",
+      call. = FALSE
+    )
+  }
+  prob
 }

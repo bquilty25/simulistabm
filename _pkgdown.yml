@@ -12,6 +12,7 @@ reference:
     desc: Functions to simulate disease outbreak data.
     contents:
     - starts_with("sim_")
+    - chain_to_outbreak
 
   - title: Right-truncate line list
     contents:
@@ -29,6 +30,15 @@ reference:
     contents:
     - create_config
 
+  - title: Spatial simulation
+    desc: Locations, mobility and transmission that varies over time and place.
+    contents:
+    - create_geography
+    - print.simulist_geography
+    - mobility_gravity
+    - mobility_radiation
+    - intervention_schedule
+
 articles:
 - title: Customising simulated outbreak
   navbar: Customising simulated outbreak
@@ -37,6 +47,7 @@ articles:
   - age-struct-pop
   - time-varying-cfr
   - reporting-delays-truncation
+  - spatial-outbreaks
 - title: Wrangling and plotting data
   navbar: Wrangling and plotting data
   contents:

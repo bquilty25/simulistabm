@@ -197,3 +197,21 @@ test_that("messy_linelist errors when incorrect argument passed to dots", {
     regexp = "(Incorrect argument names supplied to)*(messy_linelist)"
   )
 })
+
+test_that("messy_linelist works with a location column", {
+  geography <- create_geography(
+    data.frame(name = c("North", "South"), population = c(1000, 2000), x = c(0, 1), y = c(0, 0))
+  )
+  set.seed(1)
+  spatial_ll <- suppressWarnings(sim_linelist(
+    contact_distribution = function(x) stats::dpois(x = x, lambda = 4),
+    outbreak_size = c(50, 300),
+    geography = geography
+  ))
+  messy <- messy_linelist(spatial_ll, prop_spelling_mistakes = 0.5)
+  expect_true("location" %in% colnames(messy))
+  # spelling mistakes reach the location names
+  expect_gt(length(unique(messy$location)), 2)
+  expect_s3_class(truncate_linelist(spatial_ll), "data.frame")
+  expect_s3_class(censor_linelist(spatial_ll, interval = "daily"), "data.frame")
+})
