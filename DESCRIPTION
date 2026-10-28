@@ -1,9 +1,11 @@
-Package: simulist
-Title: Simulate Disease Outbreak Line List and Contacts Data
-Version: 0.7.1.9000
+Package: simulistabm
+Title: Agent-Based Simulation of Disease Outbreak Line List and Contacts Data
+Version: 0.1.0.9000
 Authors@R: c(
-    person("Joshua W.", "Lambert", , "joshua.lambert@lshtm.ac.uk", role = c("aut", "cre", "cph"),
-           comment = c(ORCID = "0000-0001-5218-3046")),
+    person("Billy", "Quilty", , "Billy.QUILTY@epicentre.msf.org", role = c("aut", "cre"),
+           comment = "Author of the agent-based and spatial extensions"),
+    person("Joshua W.", "Lambert", , "joshua.lambert@lshtm.ac.uk", role = c("aut", "cph"),
+           comment = c(ORCID = "0000-0001-5218-3046", "Author of simulist, from which this package is forked")),
     person("Carmen", "Tamayo Cuartero", , "carmen.tamayo-cuartero@lshtm.ac.uk", role = "aut",
            comment = c(ORCID = "0000-0003-4184-2864")),
     person("Hugo", "Gruson", , "hugo@data.org", role = c("ctb", "rev"),
@@ -19,15 +21,14 @@ Authors@R: c(
     person("London School of Hygiene and Tropical Medicine, LSHTM", role = "cph",
            comment = c(ROR = "00a0jsq62"))
   )
-Description: Tools to simulate realistic raw case data for an epidemic in
-    the form of line lists and contacts using a branching process.
-    Simulated outbreaks are parameterised with epidemiological parameters
-    and can have age-structured populations, age-stratified
-    hospitalisation and death risk and time-varying case fatality risk.
+Description: A fork of 'simulist' that adds an agent-based outbreak model
+    built on 'individual', with households, finite populations that
+    deplete, mobility between locations and location-level interventions.
+    Line lists and contacts have the same structure as 'simulist', so its
+    tools to make data messy, right-truncate and censor apply unchanged.
+    The branching process simulation of 'simulist' is kept, with a
+    spatial extension.
 License: MIT + file LICENSE
-URL: https://github.com/epiverse-trace/simulist,
-    https://epiverse-trace.github.io/simulist/
-BugReports: https://github.com/epiverse-trace/simulist/issues
 Depends: 
     R (>= 4.2.0)
 Imports:
@@ -35,6 +36,7 @@ Imports:
     english,
     epiparameter (>= 0.4.0),
     grates,
+    individual,
     randomNames,
     rlang,
     stats

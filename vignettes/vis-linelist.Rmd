@@ -21,7 +21,7 @@ This vignette gives an overview of the ways to plot the line list and contacts d
 Plotting can be useful to identify certain transmission dynamics and patterns in the simulated data, or just to check that the simulated data looks as expected given how the simulation was parameterised.
 
 ```{r setup}
-library(simulist)
+library(simulistabm)
 library(epiparameter)
 library(incidence2)
 library(ggplot2)

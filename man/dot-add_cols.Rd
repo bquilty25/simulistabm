@@ -122,7 +122,7 @@ to \code{NULL} this argument will automatically be set to \code{NULL} if not spe
 or can be manually set to \code{NULL}. See details and examples for more
 information. The \code{hosp_death_risk} can vary through time if specified in
 the \code{time_varying_death_risk} element of \code{config}, see
-\code{vignette("time-varying-cfr", package = "simulist")} for more information.}
+\code{vignette("time-varying-cfr", package = "simulistabm")} for more information.}
 
 \item{non_hosp_death_risk}{Either a single \code{numeric} for the death risk for
 outside of hospitals across the population, or a \verb{<data.frame>} with age
@@ -132,7 +132,7 @@ argument is set to \code{NULL} this argument will automatically be set to \code{
 if not specified or can be manually set to \code{NULL}. See details and examples
 for more information. The \code{non_hosp_death_risk} can vary through time if
 specified in the \code{time_varying_death_risk} element of \code{config}, see
-\code{vignette("time-varying-cfr", package = "simulist")} for more information.}
+\code{vignette("time-varying-cfr", package = "simulistabm")} for more information.}
 
 \item{config}{A list of settings to adjust the randomly sampled delays and
 Ct values. See \code{\link[=create_config]{create_config()}} for more information.}

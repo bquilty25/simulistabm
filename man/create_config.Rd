@@ -29,7 +29,7 @@ a mean (\eqn{\mu}) of 25 and a standard deviation (\eqn{\sigma}) of 2.}
 a \code{function} with two arguments, \code{risk} and \code{time}, to apply a
 time varying death risk of hospitalised and non-hospitalised cases in
 the outbreak simulation. See
-\code{vignette("time-varying-cfr", package = "simulist")}.}
+\code{vignette("time-varying-cfr", package = "simulistabm")}.}
 \item{\code{prob_male}}{By default is 0.5, so there is a equal probability of
 each case or contact being male or female. The value must be non-negative
 and less than or equal to 1. Smaller values will result in a higher

@@ -31,7 +31,7 @@ Locations do not have finite populations in this version, so the number of susce
 :::
 
 ```{r setup}
-library(simulist)
+library(simulistabm)
 ```
 
 ## Locations and mobility

@@ -32,6 +32,8 @@ knitr::opts_chunk$set(
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.08781/status.svg)](https://doi.org/10.21105/joss.08781)
 <!-- badges: end -->
 
+> **`{simulistabm}` is a fork of [`{simulist}`](https://github.com/epiverse-trace/simulist).** It adds `sim_outbreak_abm()`, an agent-based outbreak model built on [`{individual}`](https://github.com/mrc-ide/individual) with households, finite populations that deplete, mobility between locations and location-level interventions, and `chain_to_outbreak()`, which turns a transmission chain from any model into `{simulist}` output. It also extends the branching process with locations (`create_geography()`) and time- and location-dependent transmission (`intervention_schedule()`). Line lists and contacts keep `{simulist}`'s structure, so its other functions apply unchanged. The rest of this README describes `{simulist}`, whose functions are all included.
+
 `{simulist}` is an R package to simulate individual-level infectious disease outbreak data, including line lists and contact tracing data. It can often be useful to have synthetic datasets like these available when demonstrating outbreak analytics techniques or testing new analysis methods.
 
 `{simulist}` is developed at the [Centre for the Mathematical Modelling of Infectious Diseases](https://www.lshtm.ac.uk/research/centres/centre-mathematical-modelling-infectious-diseases) at the [London School of Hygiene and Tropical Medicine](https://www.lshtm.ac.uk/) as part of [Epiverse-TRACE](https://data.org/initiatives/epiverse/).
@@ -78,7 +80,7 @@ install.packages("simulist", repos = c("https://epiverse-trace.r-universe.dev", 
 ## Quick start
 
 ```{r load-simulist}
-library(simulist)
+library(simulistabm)
 ```
 
 A line list can be simulated by calling `sim_linelist()`. The function provides sensible defaults to quickly generate a epidemiologically valid data set.

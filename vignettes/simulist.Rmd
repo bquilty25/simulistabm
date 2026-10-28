@@ -21,7 +21,7 @@ The main function in the {simulist} package is `sim_linelist()`. This functions 
 For this introduction we will simulate a line list for the early stages of a COVID-19 (SARS-CoV-2) outbreak. This will require two R packages: {simulist}, to produce the line list, and {epiparameter} to provide epidemiological parameters, such as onset-to-death delays.
 
 ```{r setup}
-library(simulist)
+library(simulistabm)
 library(epiparameter)
 ```
 

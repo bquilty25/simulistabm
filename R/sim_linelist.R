@@ -166,7 +166,7 @@
 #' or can be manually set to `NULL`. See details and examples for more
 #' information. The `hosp_death_risk` can vary through time if specified in
 #' the `time_varying_death_risk` element of `config`, see
-#' `vignette("time-varying-cfr", package = "simulist")` for more information.
+#' `vignette("time-varying-cfr", package = "simulistabm")` for more information.
 #'
 #' @param non_hosp_death_risk Either a single `numeric` for the death risk for
 #' outside of hospitals across the population, or a `<data.frame>` with age
@@ -176,7 +176,7 @@
 #' if not specified or can be manually set to `NULL`. See details and examples
 #' for more information. The `non_hosp_death_risk` can vary through time if
 #' specified in the `time_varying_death_risk` element of `config`, see
-#' `vignette("time-varying-cfr", package = "simulist")` for more information.
+#' `vignette("time-varying-cfr", package = "simulistabm")` for more information.
 #'
 #' @param outbreak_start_date A `date` for the start of the outbreak.
 #'
