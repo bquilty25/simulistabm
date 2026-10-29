@@ -215,6 +215,11 @@ sim_outbreak_abm <- function(geography,
     contact_tracing_status_probs = contact_tracing_status_probs,
     config = config
   )
+  # agent ids do not follow infection order, so order cases by onset as
+  # sim_outbreak() returns them
+  linelist <- outbreak$linelist
+  outbreak$linelist <- linelist[order(linelist$date_onset, linelist$id), , drop = FALSE]
+  row.names(outbreak$linelist) <- NULL
   run$daily$date <- outbreak_start_date + run$daily$day
   attr(outbreak, "daily") <- run$daily[c("date", "location", "new_infections", "infectious")]
   attr(outbreak, "complete_until") <- outbreak_start_date + run$last_day
