@@ -142,10 +142,13 @@ responded <- sim_outbreak_abm(
   reporting_delay = function(n) rgamma(n, shape = 2, rate = 0.5),
   vaccination = vaccination("ring", efficacy = 0.9, start_after_reports = 30, coverage = 0.8, delay = 2),
   contact_tracing = contact_tracing(prob_traced = 0.6, delay = 2, start_after_reports = 30),
+  counterfactual = TRUE,
   outbreak_size = c(50, 1e5)
 )
 nrow(responded$linelist)
 attr(responded, "interventions")
+# the same simulation without the interventions, identical until they start
+colSums(attr(responded, "counterfactual")[c("onsets_with", "onsets_without")], na.rm = TRUE)
 table(responded$contacts$status)
 head(attr(responded, "case_interventions"))
 ```

@@ -65,6 +65,11 @@
 #' `vaccination` or `contact_tracing`, cases are reported during the
 #' simulation (after `reporting_delay`, or at onset if in quarantine), so
 #' interventions can respond to reports.
+#' @param counterfactual A single `logical`: with `vaccination` or
+#' `contact_tracing`, also rerun the same simulation without them (default
+#' `FALSE`). Interventions draw random numbers from a separate stream, so the
+#' two runs are identical until the first intervention acts, and the
+#' difference between them is the effect of the interventions.
 #' @param n_seeds A single whole number of agents infected at the start, in
 #' the geography's `seed_location` (or a location drawn by population).
 #' @param contacts_named A single non-negative `numeric`: the mean number of
@@ -94,6 +99,11 @@
 #'   vaccination, the date traced as a contact, and whether they were in
 #'   quarantine at onset.
 #' * `"vaccinations"`: doses given by date and location.
+#' * `"counterfactual"` (with `counterfactual = TRUE`): daily infections and
+#'   onsets with the interventions (`infections_with`, `onsets_with`) and
+#'   without them (`infections_without`, `onsets_without`), `NA` after a run
+#'   stopped. The run without interventions stops at five times the maximum
+#'   outbreak size.
 #' @export
 #'
 #' @examples
@@ -126,6 +136,7 @@ sim_outbreak_abm <- function(geography,
                              interventions = NULL,
                              vaccination = NULL,
                              contact_tracing = NULL,
+                             counterfactual = FALSE,
                              n_seeds = 1,
                              contacts_named = 2,
                              max_days = 730,
@@ -172,6 +183,7 @@ sim_outbreak_abm <- function(geography,
   }
   checkmate::assert_class(vaccination, "simulist_vaccination", null.ok = TRUE)
   checkmate::assert_class(contact_tracing, "simulist_contact_tracing", null.ok = TRUE)
+  checkmate::assert_flag(counterfactual)
   # with vaccination or contact tracing, cases are reported during the run
   in_run_reporting <- if (!is.null(vaccination) || !is.null(contact_tracing)) {
     if (is.null(reporting_delay)) function(n) rep(0, n) else as.function(reporting_delay, func_type = "generate")
@@ -193,7 +205,10 @@ sim_outbreak_abm <- function(geography,
   # the population is built once and reused by every attempt, since rebuilding
   # millions of agents costs more than a failed introduction
   agents <- .abm_population(geography, household_size, population_age, config$prob_male, infectiousness)
+  replay <- counterfactual && (!is.null(vaccination) || !is.null(contact_tracing))
+  if (!exists(".Random.seed", envir = globalenv())) stats::runif(1)
   for (attempt in seq_len(1e3)) {
+    attempt_state <- get(".Random.seed", envir = globalenv())
     run <- .sim_abm(
       geography = geography,
       agents = agents,
@@ -225,6 +240,29 @@ sim_outbreak_abm <- function(geography,
       "Returning data early with ", run$n_infected, " infections.",
       call. = FALSE
     )
+  }
+  # rerun the kept attempt from the same state without vaccination or contact
+  # tracing; interventions draw from their own stream, so the two runs match
+  # until the first intervention acts
+  without <- if (replay) {
+    after_state <- get(".Random.seed", envir = globalenv())
+    assign(".Random.seed", attempt_state, envir = globalenv())
+    rerun <- .sim_abm(
+      geography = geography,
+      agents = agents,
+      household_hazard = household_hazard,
+      community_hazard = community_hazard,
+      latent_period = latent_period,
+      infectious_period = infectious_period,
+      interventions = interventions,
+      n_seeds = n_seeds,
+      contacts_named = contacts_named,
+      max_days = max_days,
+      # unchecked, the outbreak grows larger, so it is allowed to run further
+      max_infections = 5 * max(outbreak_size)
+    )
+    assign(".Random.seed", after_state, envir = globalenv())
+    rerun
   }
 
   chain_cols <- intersect(
@@ -277,7 +315,28 @@ sim_outbreak_abm <- function(geography,
       attr(outbreak, "vaccinations") <- doses[c("date", "location", "doses")]
     }
   }
+  if (!is.null(without)) {
+    attr(outbreak, "counterfactual") <- .daily_series(list(with = run, without = without), outbreak_start_date)
+  }
   outbreak
+}
+
+#' Daily infections and onsets of each run, by date, up to the last day each
+#' was complete (later days are `NA`)
+#' @keywords internal
+.daily_series <- function(runs, outbreak_start_date) {
+  last <- max(vapply(runs, \(r) r$last_day, numeric(1)))
+  days <- 0:last
+  series <- lapply(names(runs), \(name) {
+    r <- runs[[name]]
+    infections <- tabulate(r$infections$exposure_day + 1, nbins = length(days))
+    onsets <- tabulate(r$infections$onset_day[r$infections$onset_day <= last] + 1, nbins = length(days))
+    after <- days > r$last_day
+    infections[after] <- NA
+    onsets[after] <- NA
+    stats::setNames(data.frame(infections, onsets), paste0(c("infections_", "onsets_"), name))
+  })
+  cbind(data.frame(date = outbreak_start_date + days), do.call(cbind, series))
 }
 
 #' Build the agents of an agent-based simulation
@@ -410,6 +469,8 @@ sim_outbreak_abm <- function(geography,
       contact_tracing = if (is.null(contact_tracing)) Inf else if (is.null(contact_tracing$start_after_reports)) contact_tracing$start else Inf
     )
     draw_reporting_delay <- if (is.null(reporting_delay)) function(k) rep(0, k) else reporting_delay
+    # read from the current state without drawing from it
+    side_seed <- .Random.seed[length(.Random.seed)] %% 1e8L
   }
   push <- function(queue, days, agents) {
     for (d in unique(days)) {
@@ -555,7 +616,9 @@ sim_outbreak_abm <- function(geography,
   infection <- function(t) {
     day <- t - 1
     if (stopped) return(invisible(NULL))
-    if (track) intervene(day)
+    # interventions draw from their own stream, so until they act, a run with
+    # them follows the same path as a run without
+    if (track) .with_side_seed(side_seed + day, intervene(day))
     infectious_now <- health$get_index_of("I")$to_vector()
     daily_infectious[t, ] <<- tabulate(location[infectious_now], nbins = n_locations)
     if (length(infectious_now) == 0) {
@@ -702,6 +765,16 @@ sim_outbreak_abm <- function(geography,
       recovery_day = recovery_day[!is.na(exposure_day)]
     )
   )
+}
+
+#' Evaluate `expr` with the random number generator seeded with `seed`, then
+#' restore the previous state, so the main stream is not consumed
+#' @keywords internal
+.with_side_seed <- function(seed, expr) {
+  old <- get(".Random.seed", envir = globalenv())
+  on.exit(assign(".Random.seed", old, envir = globalenv()))
+  set.seed(seed)
+  expr
 }
 
 #' Sample agents uniformly from those still eligible in each location
