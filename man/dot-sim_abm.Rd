@@ -18,7 +18,9 @@
   max_infections,
   vaccination = NULL,
   contact_tracing = NULL,
-  reporting_delay = NULL
+  reporting_delay = NULL,
+  reseed_day = Inf,
+  reseed = NULL
 )
 }
 \arguments{

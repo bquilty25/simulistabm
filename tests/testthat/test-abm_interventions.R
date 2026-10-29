@@ -109,6 +109,25 @@ test_that("the counterfactual matches until the interventions start", {
   expect_null(attr(plain, "counterfactual"))
 })
 
+test_that("paired reruns branch at the start and are capped in length", {
+  outbreak <- run_abm(
+    contact_tracing = contact_tracing(prob_traced = 0.5, delay = 2, start_after_reports = 30),
+    counterfactual = TRUE,
+    counterfactual_pairs = 2,
+    counterfactual_days = 60
+  )
+  pairs <- attr(outbreak, "counterfactual_pairs")
+  kept <- attr(outbreak, "counterfactual")
+  start <- min(attr(outbreak, "interventions")$start_date)
+  expect_setequal(unique(pairs$pair), 1:2)
+  for (k in 1:2) {
+    pair <- pairs[pairs$pair == k & pairs$date < start, ]
+    expect_identical(pair$infections_with, kept$infections_with[kept$date < start])
+    expect_identical(pair$infections_without, pair$infections_with)
+  }
+  expect_true(all(is.na(pairs$onsets_without[pairs$date > start + 61])))
+})
+
 test_that("interventions keep the simulist structure", {
   outbreak <- run_abm(
     vaccination = vaccination("ring", efficacy = 0.9, start_after_reports = 20),

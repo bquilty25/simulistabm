@@ -70,6 +70,16 @@
 #' `FALSE`). Interventions draw random numbers from a separate stream, so the
 #' two runs are identical until the first intervention acts, and the
 #' difference between them is the effect of the interventions.
+#' @param counterfactual_pairs A single whole number: with `counterfactual`,
+#' also run this many pairs of simulations that branch on the day the first
+#' intervention starts, each pair sharing a seed, one with and one without the
+#' interventions (default 0). After the start, a single run and its rerun
+#' drift apart by chance, which in small outbreaks can outweigh the
+#' interventions; the mean difference over pairs estimates their expected
+#' effect.
+#' @param counterfactual_days A single `numeric`: how many days after the
+#' first intervention starts the reruns continue (default `Inf`, to the end).
+#' Shorter reruns are faster; later days are `NA`.
 #' @param n_seeds A single whole number of agents infected at the start, in
 #' the geography's `seed_location` (or a location drawn by population).
 #' @param contacts_named A single non-negative `numeric`: the mean number of
@@ -104,6 +114,8 @@
 #'   without them (`infections_without`, `onsets_without`), `NA` after a run
 #'   stopped. The run without interventions stops at five times the maximum
 #'   outbreak size.
+#' * `"counterfactual_pairs"` (with `counterfactual_pairs` above 0): the same
+#'   columns for each `pair`.
 #' @export
 #'
 #' @examples
@@ -137,6 +149,8 @@ sim_outbreak_abm <- function(geography,
                              vaccination = NULL,
                              contact_tracing = NULL,
                              counterfactual = FALSE,
+                             counterfactual_pairs = 0,
+                             counterfactual_days = Inf,
                              n_seeds = 1,
                              contacts_named = 2,
                              max_days = 730,
@@ -184,6 +198,8 @@ sim_outbreak_abm <- function(geography,
   checkmate::assert_class(vaccination, "simulist_vaccination", null.ok = TRUE)
   checkmate::assert_class(contact_tracing, "simulist_contact_tracing", null.ok = TRUE)
   checkmate::assert_flag(counterfactual)
+  checkmate::assert_count(counterfactual_pairs)
+  checkmate::assert_number(counterfactual_days, lower = 1)
   # with vaccination or contact tracing, cases are reported during the run
   in_run_reporting <- if (!is.null(vaccination) || !is.null(contact_tracing)) {
     if (is.null(reporting_delay)) function(n) rep(0, n) else as.function(reporting_delay, func_type = "generate")
@@ -244,10 +260,9 @@ sim_outbreak_abm <- function(geography,
   # rerun the kept attempt from the same state without vaccination or contact
   # tracing; interventions draw from their own stream, so the two runs match
   # until the first intervention acts
-  without <- if (replay) {
-    after_state <- get(".Random.seed", envir = globalenv())
+  rerun <- function(with_interventions, reseed_day = Inf, reseed = NULL) {
     assign(".Random.seed", attempt_state, envir = globalenv())
-    rerun <- .sim_abm(
+    .sim_abm(
       geography = geography,
       agents = agents,
       household_hazard = household_hazard,
@@ -257,12 +272,36 @@ sim_outbreak_abm <- function(geography,
       interventions = interventions,
       n_seeds = n_seeds,
       contacts_named = contacts_named,
-      max_days = max_days,
+      max_days = rerun_days,
       # unchecked, the outbreak grows larger, so it is allowed to run further
-      max_infections = 5 * max(outbreak_size)
+      max_infections = if (with_interventions) max(outbreak_size) else 5 * max(outbreak_size),
+      vaccination = if (with_interventions) vaccination,
+      contact_tracing = if (with_interventions) contact_tracing,
+      reporting_delay = if (with_interventions) in_run_reporting,
+      reseed_day = reseed_day,
+      reseed = reseed
     )
+  }
+  without <- NULL
+  pairs <- NULL
+  if (replay) {
+    after_state <- get(".Random.seed", envir = globalenv())
+    start <- min(run$interventions$start_day)
+    rerun_days <- if (is.finite(start)) min(max_days, start + counterfactual_days + 1) else max_days
+    without <- rerun(FALSE)
+    # paired reruns from the day the first intervention started: each pair
+    # branches with its own seed, with and without the interventions, so the
+    # mean difference is the expected effect rather than one run's chance
+    if (counterfactual_pairs > 0 && is.finite(start)) {
+      base <- attempt_state[length(attempt_state)] %% 1e8L
+      pairs <- lapply(seq_len(counterfactual_pairs), \(k) {
+        list(
+          with = rerun(TRUE, reseed_day = start, reseed = base + k),
+          without = rerun(FALSE, reseed_day = start, reseed = base + k)
+        )
+      })
+    }
     assign(".Random.seed", after_state, envir = globalenv())
-    rerun
   }
 
   chain_cols <- intersect(
@@ -318,11 +357,16 @@ sim_outbreak_abm <- function(geography,
   if (!is.null(without)) {
     attr(outbreak, "counterfactual") <- .daily_series(list(with = run, without = without), outbreak_start_date)
   }
+  if (!is.null(pairs)) {
+    attr(outbreak, "counterfactual_pairs") <- do.call(rbind, lapply(seq_along(pairs), \(k) {
+      cbind(pair = k, .daily_series(pairs[[k]], outbreak_start_date))
+    }))
+  }
   outbreak
 }
 
-#' Daily infections and onsets of each run, by date, up to the last day each
-#' was complete (later days are `NA`)
+#' Daily infections and onsets of each run, by date. After a run stopped at a
+#' limit, days are `NA`; after an outbreak ended, they are zero.
 #' @keywords internal
 .daily_series <- function(runs, outbreak_start_date) {
   last <- max(vapply(runs, \(r) r$last_day, numeric(1)))
@@ -331,7 +375,7 @@ sim_outbreak_abm <- function(geography,
     r <- runs[[name]]
     infections <- tabulate(r$infections$exposure_day + 1, nbins = length(days))
     onsets <- tabulate(r$infections$onset_day[r$infections$onset_day <= last] + 1, nbins = length(days))
-    after <- days > r$last_day
+    after <- days > r$last_day & !isTRUE(r$ended)
     infections[after] <- NA
     onsets[after] <- NA
     stats::setNames(data.frame(infections, onsets), paste0(c("infections_", "onsets_"), name))
@@ -391,7 +435,9 @@ sim_outbreak_abm <- function(geography,
                      max_infections,
                      vaccination = NULL,
                      contact_tracing = NULL,
-                     reporting_delay = NULL) {
+                     reporting_delay = NULL,
+                     reseed_day = Inf,
+                     reseed = NULL) {
   locations <- geography$locations
   mobility <- geography$mobility
   n_locations <- nrow(locations)
@@ -575,6 +621,14 @@ sim_outbreak_abm <- function(geography,
       if (day >= start_day[["vaccination"]] && vaccination$type == "ring") {
         ring <- c(household_members(reported), infected_by)
         if (length(infected_by) > 0) ring <- c(ring, household_members(infected_by))
+        # community contacts in each case's location, not yet vaccinated
+        if (vaccination$community_ring > 0) {
+          per_location <- pmin(
+            tabulate(location[reported], nbins = n_locations) * vaccination$community_ring,
+            vacc_eligible_count
+          )
+          ring <- c(ring, .sample_susceptible(per_location, location_first, population, vacc_eligible, no_one))
+        }
         ring <- setdiff(unique(ring), reported)
         ring <- ring[stats::runif(length(ring)) < vaccination$coverage]
         if (length(ring) > 0) {
@@ -616,6 +670,8 @@ sim_outbreak_abm <- function(geography,
   infection <- function(t) {
     day <- t - 1
     if (stopped) return(invisible(NULL))
+    # paired reruns branch here, each pair sharing a seed from this day
+    if (day == reseed_day) set.seed(reseed)
     # interventions draw from their own stream, so until they act, a run with
     # them follows the same path as a run without
     if (track) .with_side_seed(side_seed + day, intervene(day))
@@ -757,6 +813,8 @@ sim_outbreak_abm <- function(geography,
     last_day = last_day,
     n_infected = sum(!is.na(exposure_day)),
     hit_max = sum(!is.na(exposure_day)) > max_infections,
+    # no one left latent or infectious, rather than stopped by a limit
+    ended = sum(!is.na(exposure_day)) <= max_infections && last_day < max_days - 1,
     infections = data.frame(
       agent = which(!is.na(exposure_day)),
       infector = infector[!is.na(exposure_day)],

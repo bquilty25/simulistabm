@@ -2,13 +2,13 @@
 % Please edit documentation in R/sim_outbreak_abm.R
 \name{.daily_series}
 \alias{.daily_series}
-\title{Daily infections and onsets of each run, by date, up to the last day each
-was complete (later days are \code{NA})}
+\title{Daily infections and onsets of each run, by date. After a run stopped at a
+limit, days are \code{NA}; after an outbreak ended, they are zero.}
 \usage{
 .daily_series(runs, outbreak_start_date)
 }
 \description{
-Daily infections and onsets of each run, by date, up to the last day each
-was complete (later days are \code{NA})
+Daily infections and onsets of each run, by date. After a run stopped at a
+limit, days are \code{NA}; after an outbreak ended, they are zero.
 }
 \keyword{internal}

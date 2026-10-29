@@ -12,7 +12,8 @@ vaccination(
   delay_to_protection = 7,
   doses_per_day = NULL,
   coverage = 0.8,
-  delay = 2
+  delay = 2,
+  community_ring = 0
 )
 }
 \arguments{
@@ -41,6 +42,10 @@ agent in a ring is vaccinated, for \code{"ring"} vaccination.}
 \item{delay}{A \code{function} with a single argument returning that many delays
 in days from a report to the vaccination of its ring, or a single
 non-negative \code{numeric} for a fixed delay.}
+
+\item{community_ring}{A single whole number: for \code{"ring"} vaccination, how
+many agents from the case's location are added to each ring as its wider
+community contacts (default 0).}
 }
 \value{
 A \verb{<simulist_vaccination>} object.
@@ -59,8 +64,9 @@ vaccinated and have not been reported as cases.
 
 \code{"ring"} vaccination follows each case reported once the programme has
 started: the case's household members, the agents it infected before it was
-reported, and their household members are each vaccinated with probability
-\code{coverage}, \code{delay} days after the report.
+reported, their household members, and \code{community_ring} unvaccinated agents
+drawn from the case's location (its wider community contacts) are each
+vaccinated with probability \code{coverage}, \code{delay} days after the report.
 }
 \examples{
 vaccination("ring", efficacy = 0.9, start_after_reports = 20, coverage = 0.8)

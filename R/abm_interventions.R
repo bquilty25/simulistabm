@@ -13,8 +13,9 @@
 #'
 #' `"ring"` vaccination follows each case reported once the programme has
 #' started: the case's household members, the agents it infected before it was
-#' reported, and their household members are each vaccinated with probability
-#' `coverage`, `delay` days after the report.
+#' reported, their household members, and `community_ring` unvaccinated agents
+#' drawn from the case's location (its wider community contacts) are each
+#' vaccinated with probability `coverage`, `delay` days after the report.
 #'
 #' @param type `"mass"` or `"ring"`.
 #' @param efficacy A single `numeric` between 0 and 1: the proportional
@@ -34,6 +35,9 @@
 #' @param delay A `function` with a single argument returning that many delays
 #' in days from a report to the vaccination of its ring, or a single
 #' non-negative `numeric` for a fixed delay.
+#' @param community_ring A single whole number: for `"ring"` vaccination, how
+#' many agents from the case's location are added to each ring as its wider
+#' community contacts (default 0).
 #'
 #' @return A `<simulist_vaccination>` object.
 #' @export
@@ -48,8 +52,10 @@ vaccination <- function(type = c("mass", "ring"),
                         delay_to_protection = 7,
                         doses_per_day = NULL,
                         coverage = 0.8,
-                        delay = 2) {
+                        delay = 2,
+                        community_ring = 0) {
   type <- match.arg(type)
+  checkmate::assert_count(community_ring)
   checkmate::assert_number(efficacy, lower = 0, upper = 1)
   checkmate::assert_number(start, lower = 0)
   checkmate::assert_count(start_after_reports, positive = TRUE, null.ok = TRUE)
@@ -65,7 +71,8 @@ vaccination <- function(type = c("mass", "ring"),
       delay_to_protection = delay_to_protection,
       doses_per_day = if (is.null(doses_per_day)) 0 else doses_per_day,
       coverage = coverage,
-      delay = .as_delay(delay, "delay")
+      delay = .as_delay(delay, "delay"),
+      community_ring = community_ring
     ),
     class = "simulist_vaccination"
   )

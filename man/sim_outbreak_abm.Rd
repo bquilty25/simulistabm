@@ -16,6 +16,8 @@ sim_outbreak_abm(
   vaccination = NULL,
   contact_tracing = NULL,
   counterfactual = FALSE,
+  counterfactual_pairs = 0,
+  counterfactual_days = Inf,
   n_seeds = 1,
   contacts_named = 2,
   max_days = 730,
@@ -81,6 +83,18 @@ interventions can respond to reports.}
 \code{FALSE}). Interventions draw random numbers from a separate stream, so the
 two runs are identical until the first intervention acts, and the
 difference between them is the effect of the interventions.}
+
+\item{counterfactual_pairs}{A single whole number: with \code{counterfactual},
+also run this many pairs of simulations that branch on the day the first
+intervention starts, each pair sharing a seed, one with and one without the
+interventions (default 0). After the start, a single run and its rerun
+drift apart by chance, which in small outbreaks can outweigh the
+interventions; the mean difference over pairs estimates their expected
+effect.}
+
+\item{counterfactual_days}{A single \code{numeric}: how many days after the
+first intervention starts the reruns continue (default \code{Inf}, to the end).
+Shorter reruns are faster; later days are \code{NA}.}
 
 \item{n_seeds}{A single whole number of agents infected at the start, in
 the geography's \code{seed_location} (or a location drawn by population).}
@@ -254,6 +268,8 @@ onsets with the interventions (\code{infections_with}, \code{onsets_with}) and
 without them (\code{infections_without}, \code{onsets_without}), \code{NA} after a run
 stopped. The run without interventions stops at five times the maximum
 outbreak size.
+\item \code{"counterfactual_pairs"} (with \code{counterfactual_pairs} above 0): the same
+columns for each \code{pair}.
 }
 }
 \description{
