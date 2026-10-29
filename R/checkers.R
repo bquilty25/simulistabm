@@ -114,10 +114,23 @@
                              hosp_risk = NULL,
                              hosp_death_risk = NULL,
                              non_hosp_death_risk = NULL,
-                             population_age = NULL) {
+                             population_age = NULL,
+                             geography = NULL) {
   sim_type <- match.arg(sim_type)
 
-  checkmate::assert_number(prob_infection, lower = 0, upper = 1)
+  if (is.function(prob_infection)) {
+    .check_func_req_args(
+      prob_infection,
+      func_name = "prob_infection",
+      n_req_args = 2,
+      req_arg_names = c("time", "location")
+    )
+  } else {
+    checkmate::assert_number(prob_infection, lower = 0, upper = 1)
+  }
+  if (!is.null(geography)) {
+    checkmate::assert_class(geography, "simulist_geography")
+  }
   .check_func_req_args(contact_distribution, func_name = "contact_distribution")
   .check_func_req_args(infectious_period, func_name = "infectious_period")
   checkmate::assert_date(outbreak_start_date)
@@ -371,16 +384,17 @@
 #' called for its side-effects, which will error if the input is invalid.
 #' @keywords internal
 .check_linelist <- function(linelist) {
+  default_cols <- c(
+    "id", "case_name", "case_type", "sex", "age", "date_onset",
+    "date_reporting", "date_admission", "outcome", "date_outcome",
+    "date_first_contact", "date_last_contact", "ct_value"
+  )
   stopifnot(
     "linelist must be a data.frame output from `sim_linelist()`." =
-      is.data.frame(linelist) && ncol(linelist) == 13 &&
-      setequal(
-        colnames(linelist), c(
-          "id", "case_name", "case_type", "sex", "age", "date_onset",
-          "date_reporting", "date_admission", "outcome", "date_outcome",
-          "date_first_contact", "date_last_contact", "ct_value"
-        )
-      ),
+      is.data.frame(linelist) &&
+      # a line list simulated with a geography also has a location column
+      (setequal(colnames(linelist), default_cols) ||
+         setequal(colnames(linelist), c(default_cols, "location"))),
     "`linelist$date_reporting` column cannot contain any NAs." =
       !anyNA(linelist$date_reporting)
   )

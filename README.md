@@ -9,45 +9,48 @@
 
 <!-- `gh_repo` is extracted via a special environment variable in GitHub Actions -->
 
-# *simulist*: Simulate line list data <img src="man/figures/logo.svg" align="right" width="120" />
+# *simulistabm*: Agent-based line list simulation
 
 <!-- badges: start -->
 
 [![License:
 MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/mit)
-[![R-CMD-check](https://github.com/epiverse-trace/simulist/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/epiverse-trace/simulist/actions/workflows/R-CMD-check.yaml)
-[![Codecov test
-coverage](https://codecov.io/gh/epiverse-trace/simulist/branch/main/graph/badge.svg)](https://app.codecov.io/gh/epiverse-trace/simulist?branch=main)
 [![Lifecycle:
-stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
-[![Project Status: Active – The project has reached a stable, usable
-state and is being actively
-developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10471458.svg)](https://doi.org/10.5281/zenodo.10471458)
-[![CRAN
-status](https://www.r-pkg.org/badges/version/simulist)](https://CRAN.R-project.org/package=simulist)
-[![CRAN
-downloads](https://cranlogs.r-pkg.org/badges/simulist)](https://cran.r-project.org/package=simulist)
-[![DOI](https://joss.theoj.org/papers/10.21105/joss.08781/status.svg)](https://doi.org/10.21105/joss.08781)
+experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 <!-- badges: end -->
 
-`{simulist}` is an R package to simulate individual-level infectious
-disease outbreak data, including line lists and contact tracing data. It
-can often be useful to have synthetic datasets like these available when
-demonstrating outbreak analytics techniques or testing new analysis
-methods.
+`{simulistabm}` is a fork of
+[`{simulist}`](https://github.com/epiverse-trace/simulist) that
+simulates outbreaks with an agent-based model built on
+[`{individual}`](https://github.com/mrc-ide/individual) and returns the
+same line list and contacts table as `{simulist}`. Every `{simulist}`
+function is included, so truncating, messing up and censoring the output
+works unchanged.
 
-`{simulist}` is developed at the [Centre for the Mathematical Modelling
-of Infectious
-Diseases](https://www.lshtm.ac.uk/research/centres/centre-mathematical-modelling-infectious-diseases)
-at the [London School of Hygiene and Tropical
-Medicine](https://www.lshtm.ac.uk/) as part of
-[Epiverse-TRACE](https://data.org/initiatives/epiverse/).
+It was written to generate synthetic outbreaks for training and for
+testing analysis tools, where the branching process in `{simulist}`
+falls short: it has no depletion of susceptibles, no households and no
+geography, so outbreaks never peak and control cannot take effect.
 
 ## Key features
 
-`{simulist}` allows you to simulate realistic line list and contact
-tracing data, with:
+`sim_outbreak_abm()` adds:
+
+:house: Households within locations, with separate household and
+community transmission <br> :busts_in_silhouette: Finite populations, so
+outbreaks peak and end <br> :world_map: Locations with populations and a
+mobility matrix (gravity or radiation model) for community mixing <br>
+:fire: Individual variation in infectiousness, for superspreading <br>
+:construction: Interventions that reduce transmission by location and
+time <br> :link: A contacts table whose links follow the simulated
+transmission chain <br>
+
+`chain_to_outbreak()` turns a transmission chain from any model into
+`{simulist}` output, adding delays, outcomes, names, case types and
+contact tracing status.
+
+From `{simulist}`, all functions are included, which simulate realistic
+line list and contact tracing data with:
 
 :hourglass_flowing_sand: Parameterised epidemiological delay
 distributions <br> :hospital: Population-wide or age-stratified
@@ -65,37 +68,172 @@ groupings <br>
 
 ## Installation
 
-The package can be installed from CRAN using
+`{simulistabm}` is not on CRAN. Install it and `{individual}` from
+GitHub:
 
 ``` r
-install.packages("simulist")
+if (!require("pak")) install.packages("pak")
+pak::pak("mrc-ide/individual")
+pak::pak("bquilty25/simulistabm")
 ```
 
-You can install the development version of `{simulist}` from
-[GitHub](https://github.com/) with:
+It can be installed alongside `{simulist}`; call functions with
+`simulistabm::` to be explicit about which package you are using.
+
+## Quick start: agent-based model
 
 ``` r
-# check whether {pak} is installed
-if(!require("pak")) install.packages("pak")
-pak::pak("epiverse-trace/simulist")
+library(simulistabm)
 ```
 
-Alternatively, install pre-compiled binaries from [the Epiverse TRACE
-R-universe](https://epiverse-trace.r-universe.dev/simulist)
+Define the locations, their populations and how much community mixing
+stays in each location. Here three towns are placed on a line, and those
+who mix outside their own town choose a destination by a gravity model
+with a 10 km kernel.
 
 ``` r
-install.packages("simulist", repos = c("https://epiverse-trace.r-universe.dev", "https://cloud.r-project.org"))
+towns <- data.frame(
+  name = c("Ashford", "Brayton", "Cole"),
+  population = c(20000, 8000, 5000),
+  x = c(0, 12, 30),
+  y = c(0, 0, 0)
+)
+geography <- create_geography(
+  towns,
+  mobility = mobility_gravity(kernel_km = 10),
+  prob_stay = 0.85,
+  seed_location = "Ashford"
+)
+geography
+#> <simulist_geography> with 3 locations
+#> Total population: 33,000
+#> Mean probability of staying in a location: 0.85
+#> Index case location: Ashford
 ```
 
-## Quick start
+`sim_outbreak_abm()` simulates transmission among every resident, in
+households and the community, then adds delays, outcomes and names as
+`sim_outbreak()` does. Hazards are per day of infectiousness. With the
+default mean infectious period of about 4.9 days, these give about 1.5
+community infections and 0.7 household infections per case, a
+reproduction number of about 2.2. The second element of `outbreak_size`
+stops the simulation early once infections exceed it.
 
 ``` r
-library(simulist)
+set.seed(1)
+outbreak <- sim_outbreak_abm(
+  geography = geography,
+  household_hazard = 0.05,
+  community_hazard = 0.3,
+  infectiousness = function(n) rgamma(n, shape = 0.5, rate = 0.5),
+  outbreak_size = c(50, 2000)
+)
+#> Warning: Number of cases exceeds maximum outbreak size. 
+#> Returning data early with 2114 infections.
+head(outbreak$linelist)
+#>    id        case_name case_type sex age location date_onset date_reporting
+#> 1 137      Anna Turner confirmed   f   0  Ashford 2023-01-04     2023-01-04
+#> 2  62    Trevor Garman suspected   m  22  Ashford 2023-01-09     2023-01-09
+#> 3 745    Joshua Porter suspected   m  15  Ashford 2023-01-14     2023-01-14
+#> 4 678 Yesenia Manchego suspected   f  74  Ashford 2023-01-15     2023-01-15
+#> 5 619       Lael Swift  probable   f  22  Ashford 2023-01-18     2023-01-18
+#> 6 178    David Eichner confirmed   m  88  Ashford 2023-01-18     2023-01-18
+#>   date_admission   outcome date_outcome date_first_contact date_last_contact
+#> 1           <NA> recovered         <NA>               <NA>              <NA>
+#> 2           <NA> recovered         <NA>         2022-12-30        2023-01-04
+#> 3           <NA> recovered         <NA>         2023-01-04        2023-01-14
+#> 4     2023-01-19      died   2023-01-27         2023-01-07        2023-01-10
+#> 5           <NA> recovered         <NA>         2023-01-12        2023-01-19
+#> 6     2023-01-21      died   2023-01-30         2023-01-11        2023-01-17
+#>   ct_value
+#> 1     22.3
+#> 2       NA
+#> 3       NA
+#> 4       NA
+#> 5       NA
+#> 6     26.2
+head(outbreak$contacts)
+#>             from               to age sex date_first_contact date_last_contact
+#> 1 Brandon Tsosie       Ivan Moore  19   m         2023-02-26        2023-03-03
+#> 2 Brandon Tsosie Bradley Petrarca  68   m         2023-03-01        2023-03-03
+#> 3 Brandon Tsosie   Boyd Forrester  47   m         2023-02-28        2023-03-05
+#> 4 Brandon Tsosie     Megahn Waite  55   f         2023-02-23        2023-03-05
+#> 5 Brandon Tsosie  Angelito Wilson  77   m         2023-02-27        2023-03-03
+#> 6 Brandon Tsosie         Al Lopez  59   m         2023-02-27        2023-03-05
+#>   was_case           status from_location to_location
+#> 1    FALSE   under_followup       Ashford     Ashford
+#> 2    FALSE lost_to_followup       Ashford     Ashford
+#> 3    FALSE   under_followup       Ashford     Ashford
+#> 4    FALSE   under_followup       Ashford     Ashford
+#> 5    FALSE   under_followup       Ashford     Ashford
+#> 6    FALSE   under_followup       Ashford     Ashford
+table(outbreak$linelist$location)
+#> 
+#> Ashford Brayton    Cole 
+#>     799     396     119
 ```
 
-A line list can be simulated by calling `sim_linelist()`. The function
-provides sensible defaults to quickly generate a epidemiologically valid
-data set.
+Daily infections and infectious agents by location are in
+`attr(outbreak, "daily")`. Without a cap the outbreak runs until it
+ends, depleting each town. Interventions reduce transmission by location
+from a start to an end day; here transmission is cut by 60% everywhere
+from day 40:
+
+``` r
+set.seed(1)
+uncontrolled <- sim_outbreak_abm(
+  geography = geography,
+  household_hazard = 0.05,
+  community_hazard = 0.3,
+  outbreak_size = c(50, 1e5)
+)
+set.seed(1)
+controlled <- sim_outbreak_abm(
+  geography = geography,
+  household_hazard = 0.05,
+  community_hazard = 0.3,
+  interventions = data.frame(location = towns$name, start = 40, end = 200, reduction = 0.6),
+  outbreak_size = c(50, 1e5)
+)
+c(uncontrolled = nrow(uncontrolled$linelist), controlled = nrow(controlled$linelist))
+#> uncontrolled   controlled 
+#>        28301         2139
+```
+
+The output works with the rest of the package, for example a real-time
+snapshot that drops the last 14 days, with dates censored to epiweeks:
+
+``` r
+snapshot <- truncate_linelist(outbreak$linelist, truncation_day = 14)
+head(censor_linelist(snapshot, interval = "epiweek"))
+#>    id        case_name case_type sex age location date_onset date_reporting
+#> 1 137      Anna Turner confirmed   f   0  Ashford   2023-W01       2023-W01
+#> 2  62    Trevor Garman suspected   m  22  Ashford   2023-W02       2023-W02
+#> 3 745    Joshua Porter suspected   m  15  Ashford   2023-W02       2023-W02
+#> 4 678 Yesenia Manchego suspected   f  74  Ashford   2023-W03       2023-W03
+#> 5 619       Lael Swift  probable   f  22  Ashford   2023-W03       2023-W03
+#> 6 178    David Eichner confirmed   m  88  Ashford   2023-W03       2023-W03
+#>   date_admission   outcome date_outcome date_first_contact date_last_contact
+#> 1           <NA> recovered         <NA>               <NA>              <NA>
+#> 2           <NA> recovered         <NA>           2022-W52          2023-W01
+#> 3           <NA> recovered         <NA>           2023-W01          2023-W02
+#> 4       2023-W03      died     2023-W04           2023-W01          2023-W02
+#> 5           <NA> recovered         <NA>           2023-W02          2023-W03
+#> 6       2023-W03      died     2023-W05           2023-W02          2023-W03
+#>   ct_value
+#> 1     22.3
+#> 2       NA
+#> 3       NA
+#> 4       NA
+#> 5       NA
+#> 6     26.2
+```
+
+## Quick start: branching process
+
+The rest of this section is from `{simulist}`. A line list can be
+simulated by calling `sim_linelist()`. The function provides sensible
+defaults to quickly generate a epidemiologically valid data set.
 
 ``` r
 set.seed(1)
@@ -354,30 +492,34 @@ head(outbreak$contacts)
 
 ## Help
 
-To report a bug please open an
-[issue](https://github.com/epiverse-trace/simulist/issues/new/choose).
+To report a bug in the agent-based model or other additions, please open
+an [issue](https://github.com/bquilty25/simulistabm/issues). Bugs in
+functions that `{simulistabm}` shares with `{simulist}` can be reported
+to
+[`{simulist}`](https://github.com/epiverse-trace/simulist/issues/new/choose).
 
 ## Contribute
 
-Contributions to `{simulist}` are welcomed. Please follow the [package
+Contributions are welcome. Please follow the [Epiverse-TRACE
 contributing
 guide](https://github.com/epiverse-trace/.github/blob/main/CONTRIBUTING.md).
 
 ## Code of Conduct
 
-Please note that the `{simulist}` project is released with a
+Please note that `{simulistabm}`, like `{simulist}`, is released with a
 [Contributor Code of
 Conduct](https://github.com/epiverse-trace/.github/blob/main/CODE_OF_CONDUCT.md).
 By contributing to this project, you agree to abide by its terms.
 
 ## Citing this package
 
-To cite the `{simulist}` package, please cite the publication in the
-Journal of Open Source Software (JOSS), see below.
+`{simulistabm}` builds on `{simulist}` and `{individual}`. Please cite
+`{simulist}`’s publication in the Journal of Open Source Software
+(JOSS):
 
 ``` r
-citation("simulist")
-#> To cite package 'simulist' in publications use:
+citation("simulistabm")
+#> To cite package 'simulistabm' in publications use:
 #> 
 #>   Lambert J, Kucharski A, Tamayo Cuartero C (2026). "simulist: An R
 #>   package to simulate disease outbreak line list and contacts data."

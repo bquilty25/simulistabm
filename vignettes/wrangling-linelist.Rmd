@@ -17,7 +17,7 @@ knitr::opts_chunk$set(
 The {simulist} R package can generate line list data (`sim_linelist()`), contact tracing data (`sim_contacts()`), or both (`sim_outbreak()`). By default the line list produced by `sim_linelist()` and `sim_outbreak()` contains 12 columns. Some amount of post-simulation data wrangling may be needed to use the simulated epidemiological case data to certain applications. This vignette demonstrates some common data wrangling tasks that may be performed on simulated line list or contact tracing data.
 
 ```{r setup}
-library(simulist)
+library(simulistabm)
 library(epiparameter)
 library(dplyr)
 library(epicontacts)

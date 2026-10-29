@@ -35,7 +35,7 @@ See the [{epidemics} R package](https://epiverse-trace.github.io/epidemics/index
 Given that setting a time-varying case fatality risk is not needed for most use cases of the {simulist} R package, this feature uses the `config` argument in the `sim_*()` functions. Therefore, the time-varying case fatality risk can be set when calling `create_config()` (see below for details).
 
 ```{r setup}
-library(simulist)
+library(simulistabm)
 library(epiparameter)
 library(tidyr)
 library(dplyr)

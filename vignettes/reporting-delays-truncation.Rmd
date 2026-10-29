@@ -30,7 +30,7 @@ In {simulist}, `sim_linelist()` outputs a line list with a date of reporting (`$
 
 
 ```{r setup}
-library(simulist)
+library(simulistabm)
 library(epiparameter)
 library(tidyr)
 library(dplyr)

@@ -58,7 +58,18 @@
 #' number generator ([rlnorm()]) with `meanlog = 2` and `sdlog = 0.5`.
 #'
 #' @param prob_infection A single `numeric` for the probability of a secondary
-#' contact being infected by an infected primary contact.
+#' contact being infected by an infected primary contact, or a `function` with
+#' arguments `time` and `location` that returns one probability per contact,
+#' for transmission that changes over time or between locations (see
+#' [intervention_schedule()]). `time` is the contact time in days since the
+#' start of the outbreak and `location` is the contact's location of
+#' residence (`NA` when no `geography` is supplied).
+#'
+#' @param geography A `<simulist_geography>` object from [create_geography()],
+#' or `NULL` (default) for a simulation without locations. With a geography,
+#' every case has a `location` of residence in the line list, the contacts
+#' table gains `from_location` and `to_location` columns, and the number of
+#' contacts and the probability of infection can vary between locations.
 #'
 #' @param onset_to_hosp A `function` or an `<epiparameter>` object for the
 #' onset-to-hospitalisation delay distribution. `onset_to_hosp` can also be
@@ -155,7 +166,7 @@
 #' or can be manually set to `NULL`. See details and examples for more
 #' information. The `hosp_death_risk` can vary through time if specified in
 #' the `time_varying_death_risk` element of `config`, see
-#' `vignette("time-varying-cfr", package = "simulist")` for more information.
+#' `vignette("time-varying-cfr", package = "simulistabm")` for more information.
 #'
 #' @param non_hosp_death_risk Either a single `numeric` for the death risk for
 #' outside of hospitals across the population, or a `<data.frame>` with age
@@ -165,7 +176,7 @@
 #' if not specified or can be manually set to `NULL`. See details and examples
 #' for more information. The `non_hosp_death_risk` can vary through time if
 #' specified in the `time_varying_death_risk` element of `config`, see
-#' `vignette("time-varying-cfr", package = "simulist")` for more information.
+#' `vignette("time-varying-cfr", package = "simulistabm")` for more information.
 #'
 #' @param outbreak_start_date A `date` for the start of the outbreak.
 #'
@@ -315,7 +326,8 @@ sim_linelist <- function(contact_distribution = function(x) stats::dpois(x = x, 
                            probable = 0.3,
                            confirmed = 0.5
                          ),
-                         config = create_config()) {
+                         config = create_config(),
+                         geography = NULL) {
   # if hosp_risk or hosp_death_risk is supplied but onset_to_hosp is NULL
   # set risks to NULL without warning in .cross_check_sim_input()
   # this needs to happen in the current function frame and not within
@@ -371,7 +383,8 @@ sim_linelist <- function(contact_distribution = function(x) stats::dpois(x = x, 
     hosp_risk = hosp_risk,
     hosp_death_risk = hosp_death_risk,
     non_hosp_death_risk = non_hosp_death_risk,
-    population_age = population_age
+    population_age = population_age,
+    geography = geography
   )
   .cross_check_sim_input(
     onset_to_hosp = onset_to_hosp,
@@ -431,7 +444,8 @@ sim_linelist <- function(contact_distribution = function(x) stats::dpois(x = x, 
     outbreak_size = outbreak_size,
     population_age = population_age,
     case_type_probs = case_type_probs,
-    config = config
+    config = config,
+    geography = geography
   )
 
   # return line list

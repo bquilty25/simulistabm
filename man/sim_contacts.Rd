@@ -14,7 +14,8 @@ sim_contacts(
   population_age = c(0, 90),
   contact_tracing_status_probs = c(under_followup = 0.7, lost_to_followup = 0.2, unknown
     = 0.1),
-  config = create_config()
+  config = create_config(),
+  geography = NULL
 )
 }
 \arguments{
@@ -57,7 +58,12 @@ The default is an anonymous function with a lognormal distribution random
 number generator (\code{\link[=rlnorm]{rlnorm()}}) with \code{meanlog = 2} and \code{sdlog = 0.5}.}
 
 \item{prob_infection}{A single \code{numeric} for the probability of a secondary
-contact being infected by an infected primary contact.}
+contact being infected by an infected primary contact, or a \code{function} with
+arguments \code{time} and \code{location} that returns one probability per contact,
+for transmission that changes over time or between locations (see
+\code{\link[=intervention_schedule]{intervention_schedule()}}). \code{time} is the contact time in days since the
+start of the outbreak and \code{location} is the contact's location of
+residence (\code{NA} when no \code{geography} is supplied).}
 
 \item{outbreak_start_date}{A \code{date} for the start of the outbreak.}
 
@@ -90,6 +96,12 @@ contact tracing status must sum to one.}
 
 \item{config}{A list of settings to adjust the randomly sampled delays and
 Ct values. See \code{\link[=create_config]{create_config()}} for more information.}
+
+\item{geography}{A \verb{<simulist_geography>} object from \code{\link[=create_geography]{create_geography()}},
+or \code{NULL} (default) for a simulation without locations. With a geography,
+every case has a \code{location} of residence in the line list, the contacts
+table gains \code{from_location} and \code{to_location} columns, and the number of
+contacts and the probability of infection can vary between locations.}
 }
 \value{
 A contacts \verb{<data.frame>}.

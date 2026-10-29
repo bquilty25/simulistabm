@@ -20,7 +20,8 @@ sim_linelist(
   outbreak_size = c(10, 10000),
   population_age = c(0, 90),
   case_type_probs = c(suspected = 0.2, probable = 0.3, confirmed = 0.5),
-  config = create_config()
+  config = create_config(),
+  geography = NULL
 )
 }
 \arguments{
@@ -63,7 +64,12 @@ The default is an anonymous function with a lognormal distribution random
 number generator (\code{\link[=rlnorm]{rlnorm()}}) with \code{meanlog = 2} and \code{sdlog = 0.5}.}
 
 \item{prob_infection}{A single \code{numeric} for the probability of a secondary
-contact being infected by an infected primary contact.}
+contact being infected by an infected primary contact, or a \code{function} with
+arguments \code{time} and \code{location} that returns one probability per contact,
+for transmission that changes over time or between locations (see
+\code{\link[=intervention_schedule]{intervention_schedule()}}). \code{time} is the contact time in days since the
+start of the outbreak and \code{location} is the contact's location of
+residence (\code{NA} when no \code{geography} is supplied).}
 
 \item{onset_to_hosp}{A \code{function} or an \verb{<epiparameter>} object for the
 onset-to-hospitalisation delay distribution. \code{onset_to_hosp} can also be
@@ -160,7 +166,7 @@ to \code{NULL} this argument will automatically be set to \code{NULL} if not spe
 or can be manually set to \code{NULL}. See details and examples for more
 information. The \code{hosp_death_risk} can vary through time if specified in
 the \code{time_varying_death_risk} element of \code{config}, see
-\code{vignette("time-varying-cfr", package = "simulist")} for more information.}
+\code{vignette("time-varying-cfr", package = "simulistabm")} for more information.}
 
 \item{non_hosp_death_risk}{Either a single \code{numeric} for the death risk for
 outside of hospitals across the population, or a \verb{<data.frame>} with age
@@ -170,7 +176,7 @@ argument is set to \code{NULL} this argument will automatically be set to \code{
 if not specified or can be manually set to \code{NULL}. See details and examples
 for more information. The \code{non_hosp_death_risk} can vary through time if
 specified in the \code{time_varying_death_risk} element of \code{config}, see
-\code{vignette("time-varying-cfr", package = "simulist")} for more information.}
+\code{vignette("time-varying-cfr", package = "simulistabm")} for more information.}
 
 \item{outbreak_start_date}{A \code{date} for the start of the outbreak.}
 
@@ -202,6 +208,12 @@ each case type. The names of the vector must be \code{"suspected"}, \code{"proba
 
 \item{config}{A list of settings to adjust the randomly sampled delays and
 Ct values. See \code{\link[=create_config]{create_config()}} for more information.}
+
+\item{geography}{A \verb{<simulist_geography>} object from \code{\link[=create_geography]{create_geography()}},
+or \code{NULL} (default) for a simulation without locations. With a geography,
+every case has a \code{location} of residence in the line list, the contacts
+table gains \code{from_location} and \code{to_location} columns, and the number of
+contacts and the probability of infection can vary between locations.}
 }
 \value{
 A line list \verb{<data.frame>}

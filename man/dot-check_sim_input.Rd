@@ -21,7 +21,8 @@
   hosp_risk = NULL,
   hosp_death_risk = NULL,
   non_hosp_death_risk = NULL,
-  population_age = NULL
+  population_age = NULL,
+  geography = NULL
 )
 }
 \arguments{
@@ -67,7 +68,12 @@ The default is an anonymous function with a lognormal distribution random
 number generator (\code{\link[=rlnorm]{rlnorm()}}) with \code{meanlog = 2} and \code{sdlog = 0.5}.}
 
 \item{prob_infection}{A single \code{numeric} for the probability of a secondary
-contact being infected by an infected primary contact.}
+contact being infected by an infected primary contact, or a \code{function} with
+arguments \code{time} and \code{location} that returns one probability per contact,
+for transmission that changes over time or between locations (see
+\code{\link[=intervention_schedule]{intervention_schedule()}}). \code{time} is the contact time in days since the
+start of the outbreak and \code{location} is the contact's location of
+residence (\code{NA} when no \code{geography} is supplied).}
 
 \item{outbreak_start_date}{A \code{date} for the start of the outbreak.}
 
@@ -189,7 +195,7 @@ to \code{NULL} this argument will automatically be set to \code{NULL} if not spe
 or can be manually set to \code{NULL}. See details and examples for more
 information. The \code{hosp_death_risk} can vary through time if specified in
 the \code{time_varying_death_risk} element of \code{config}, see
-\code{vignette("time-varying-cfr", package = "simulist")} for more information.}
+\code{vignette("time-varying-cfr", package = "simulistabm")} for more information.}
 
 \item{non_hosp_death_risk}{Either a single \code{numeric} for the death risk for
 outside of hospitals across the population, or a \verb{<data.frame>} with age
@@ -199,7 +205,7 @@ argument is set to \code{NULL} this argument will automatically be set to \code{
 if not specified or can be manually set to \code{NULL}. See details and examples
 for more information. The \code{non_hosp_death_risk} can vary through time if
 specified in the \code{time_varying_death_risk} element of \code{config}, see
-\code{vignette("time-varying-cfr", package = "simulist")} for more information.}
+\code{vignette("time-varying-cfr", package = "simulistabm")} for more information.}
 
 \item{population_age}{Either a \code{numeric} vector with two elements or a
 \verb{<data.frame>} with age structure in the population. Use a \code{numeric} vector
@@ -208,6 +214,12 @@ bound for the age range, and and the second is the upper bound for the age
 range (both inclusive, i.e. [lower, upper]). The \verb{<data.frame>} with
 age groups and the proportion of the population in that group. See details
 and examples for more information.}
+
+\item{geography}{A \verb{<simulist_geography>} object from \code{\link[=create_geography]{create_geography()}},
+or \code{NULL} (default) for a simulation without locations. With a geography,
+every case has a \code{location} of residence in the line list, the contacts
+table gains \code{from_location} and \code{to_location} columns, and the number of
+contacts and the probability of infection can vary between locations.}
 }
 \value{
 Invisibly return the \code{sim_type} \code{character} string. The function is

@@ -7,6 +7,6 @@
 # * https://testthat.r-lib.org/articles/special-files.html
 
 library(testthat)
-library(simulist)
+library(simulistabm)
 
-test_check("simulist", stop_on_warning = FALSE)
+test_check("simulistabm", stop_on_warning = FALSE)

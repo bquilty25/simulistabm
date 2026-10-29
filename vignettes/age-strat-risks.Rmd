@@ -33,7 +33,7 @@ However, it may be unrealistic to assume that the probability an infected person
 The `sim_linelist()` function can accommodate age-stratified risks by accepting a `<data.frame>` instead of a single risk for the entire population.
 
 ```{r setup}
-library(simulist)
+library(simulistabm)
 library(epiparameter)
 ```
 
