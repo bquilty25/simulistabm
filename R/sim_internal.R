@@ -115,7 +115,10 @@
   .data$date_onset <- .data$time + outbreak_start_date
 
   # add reporting delays
-  if (sim_type %in% c("linelist", "outbreak")) {
+  if ("reporting_time" %in% colnames(.data)) {
+    # reported during the simulation, e.g. by an agent-based model
+    .data$date_reporting <- .data$reporting_time + outbreak_start_date
+  } else if (sim_type %in% c("linelist", "outbreak")) {
     .data$date_reporting <- .data$date_onset + reporting_delay(nrow(.data))
   } else {
     # reporting_delay is NULL in sim_contacts()
@@ -251,6 +254,15 @@
     )
     contacts_tbl$status <- "case"
     contacts_tbl$status[non_infect_contact_lgl_idx] <- status_type
+    if ("tracing_status" %in% colnames(.data)) {
+      contacts_tbl$status[non_infect_contact_lgl_idx] <- .data$tracing_status[non_infect_contact_lgl_idx]
+    }
+    if ("traced_time" %in% colnames(.data)) {
+      contacts_tbl$date_traced <- .data$traced_time + outbreak_start_date
+    }
+    if ("vaccination_time" %in% colnames(.data)) {
+      contacts_tbl$date_vaccination <- .data$vaccination_time + outbreak_start_date
+    }
 
     if (has_location) {
       contacts_tbl$from_location <- .data$infector_location

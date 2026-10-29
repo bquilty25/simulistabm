@@ -39,6 +39,12 @@ reference:
     - mobility_radiation
     - intervention_schedule
 
+  - title: Agent-based interventions
+    desc: Vaccination and contact tracing for sim_outbreak_abm().
+    contents:
+    - vaccination
+    - contact_tracing
+
 articles:
 - title: Customising simulated outbreak
   navbar: Customising simulated outbreak

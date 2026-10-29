@@ -58,6 +58,13 @@
 #' name, or `"all"`), `start` and `end` (days since the start of the outbreak;
 #' `end` can be `Inf`) and `reduction` (proportional reduction in
 #' susceptibility, between 0 and 1), or `NULL` (default) for none.
+#' @param vaccination A vaccination programme from [vaccination()], or `NULL`
+#' (default) for none.
+#' @param contact_tracing Case isolation and contact tracing from
+#' [contact_tracing()], or `NULL` (default) for none. With either
+#' `vaccination` or `contact_tracing`, cases are reported during the
+#' simulation (after `reporting_delay`, or at onset if in quarantine), so
+#' interventions can respond to reports.
 #' @param n_seeds A single whole number of agents infected at the start, in
 #' the geography's `seed_location` (or a location drawn by population).
 #' @param contacts_named A single non-negative `numeric`: the mean number of
@@ -77,6 +84,16 @@
 #'   date and location.
 #' * `"complete_until"`: the last date with complete onsets.
 #' * `"attempts"`: the number of simulations run to reach the minimum size.
+#'
+#' With `vaccination` or `contact_tracing`, the contacts table gains
+#' `date_traced` and `date_vaccination` columns, its `status` comes from
+#' tracing (`"unknown"` for contacts of cases reported before tracing began),
+#' and there are further attributes:
+#' * `"interventions"`: the date each intervention started.
+#' * `"case_interventions"`: for each case `id` in the line list, the date of
+#'   vaccination, the date traced as a contact, and whether they were in
+#'   quarantine at onset.
+#' * `"vaccinations"`: doses given by date and location.
 #' @export
 #'
 #' @examples
@@ -107,6 +124,8 @@ sim_outbreak_abm <- function(geography,
                              infectiousness = function(n) stats::rgamma(n = n, shape = 1, rate = 1),
                              household_size = function(n) 1L + stats::rpois(n = n, lambda = 3.5),
                              interventions = NULL,
+                             vaccination = NULL,
+                             contact_tracing = NULL,
                              n_seeds = 1,
                              contacts_named = 2,
                              max_days = 730,
@@ -151,6 +170,12 @@ sim_outbreak_abm <- function(geography,
     checkmate::assert_subset(interventions$location, c("all", geography$locations$name))
     checkmate::assert_numeric(interventions$reduction, lower = 0, upper = 1, any.missing = FALSE)
   }
+  checkmate::assert_class(vaccination, "simulist_vaccination", null.ok = TRUE)
+  checkmate::assert_class(contact_tracing, "simulist_contact_tracing", null.ok = TRUE)
+  # with vaccination or contact tracing, cases are reported during the run
+  in_run_reporting <- if (!is.null(vaccination) || !is.null(contact_tracing)) {
+    if (is.null(reporting_delay)) function(n) rep(0, n) else as.function(reporting_delay, func_type = "generate")
+  }
   # chain_to_outbreak() checks the argument as supplied; the agents' ages
   # come from the checked version
   population_age_input <- population_age
@@ -180,7 +205,10 @@ sim_outbreak_abm <- function(geography,
       n_seeds = n_seeds,
       contacts_named = contacts_named,
       max_days = max_days,
-      max_infections = max(outbreak_size)
+      max_infections = max(outbreak_size),
+      vaccination = vaccination,
+      contact_tracing = contact_tracing,
+      reporting_delay = in_run_reporting
     )
     if (sum(run$chain$infected) >= min(outbreak_size)) break
     if (attempt == 1e3) {
@@ -199,8 +227,13 @@ sim_outbreak_abm <- function(geography,
     )
   }
 
+  chain_cols <- intersect(
+    c("id", "infector", "infected", "time", "location", "age", "sex",
+      "reporting_time", "traced_time", "vaccination_time", "tracing_status"),
+    colnames(run$chain)
+  )
   outbreak <- chain_to_outbreak(
-    run$chain[c("id", "infector", "infected", "time", "location", "age", "sex")],
+    run$chain[chain_cols],
     onset_to_hosp = onset_to_hosp,
     onset_to_death = onset_to_death,
     onset_to_recovery = onset_to_recovery,
@@ -224,6 +257,26 @@ sim_outbreak_abm <- function(geography,
   attr(outbreak, "daily") <- run$daily[c("date", "location", "new_infections", "infectious")]
   attr(outbreak, "complete_until") <- outbreak_start_date + run$last_day
   attr(outbreak, "attempts") <- attempt
+  if (!is.null(run$interventions)) {
+    starts <- run$interventions$start_day
+    used <- c(vaccination = !is.null(vaccination), contact_tracing = !is.null(contact_tracing))
+    attr(outbreak, "interventions") <- data.frame(
+      intervention = names(starts)[used],
+      start_date = outbreak_start_date + unname(starts[used])
+    )
+    cases <- run$chain[run$chain$infected, ]
+    attr(outbreak, "case_interventions") <- data.frame(
+      id = cases$id,
+      date_vaccination = outbreak_start_date + cases$vaccination_time,
+      date_traced = outbreak_start_date + cases$traced_time,
+      quarantined_at_onset = run$interventions$quarantined_at_onset[cases$agent]
+    )
+    if (!is.null(vaccination)) {
+      doses <- run$interventions$doses
+      doses$date <- outbreak_start_date + doses$day
+      attr(outbreak, "vaccinations") <- doses[c("date", "location", "doses")]
+    }
+  }
   outbreak
 }
 
@@ -276,7 +329,10 @@ sim_outbreak_abm <- function(geography,
                      n_seeds,
                      contacts_named,
                      max_days,
-                     max_infections) {
+                     max_infections,
+                     vaccination = NULL,
+                     contact_tracing = NULL,
+                     reporting_delay = NULL) {
   locations <- geography$locations
   mobility <- geography$mobility
   n_locations <- nrow(locations)
@@ -318,6 +374,51 @@ sim_outbreak_abm <- function(geography,
   household_count <- tabulate(household, nbins = n_households)
   household_first <- cumsum(household_count) - household_count + 1L
 
+  # reports, tracing and vaccination happen during the run only when an
+  # intervention needs them, so runs without interventions draw the same
+  # random numbers as before
+  track <- !is.null(vaccination) || !is.null(contact_tracing)
+  if (track) {
+    onset_time <- rep(NA_real_, n)
+    report_time <- rep(NA_real_, n)
+    vacc_day <- rep(NA_real_, n)
+    traced_day <- rep(NA_real_, n)
+    quarantine_from <- rep(Inf, n)
+    quarantine_until <- rep(-Inf, n)
+    isolated_from <- rep(Inf, n)
+    quarantined_at_onset <- rep(FALSE, n)
+    is_protected <- rep(FALSE, n)
+    protected_susceptible <- integer(0)
+    vacc_eligible <- rep(TRUE, n)
+    vacc_eligible_count <- population
+    no_one <- rep(FALSE, n)
+    reported_total <- 0L
+    reported_by_location <- integer(n_locations)
+    daily_doses <- matrix(0L, max_days, n_locations)
+    # infections so far as parent-child pairs, to find the agents a reported
+    # case infected
+    parent_of <- integer(0)
+    child_of <- integer(0)
+    # agents due for each action, indexed by day + 1
+    due_onset <- list()
+    due_report <- list()
+    due_trace <- list()
+    due_vaccine <- list()
+    due_protection <- list()
+    start_day <- c(
+      vaccination = if (is.null(vaccination)) Inf else if (is.null(vaccination$start_after_reports)) vaccination$start else Inf,
+      contact_tracing = if (is.null(contact_tracing)) Inf else if (is.null(contact_tracing$start_after_reports)) contact_tracing$start else Inf
+    )
+    draw_reporting_delay <- if (is.null(reporting_delay)) function(k) rep(0, k) else reporting_delay
+  }
+  push <- function(queue, days, agents) {
+    for (d in unique(days)) {
+      queue[[d + 1]] <- c(if (length(queue) > d) queue[[d + 1]], agents[days == d])
+    }
+    queue
+  }
+  pop <- function(queue, day) if (length(queue) > day) queue[[day + 1]] else integer(0)
+
   to_recovered <- individual::TargetedEvent$new(n)
   to_recovered$add_listener(function(t, target) health$queue_update("R", target))
   to_infectious <- individual::TargetedEvent$new(n)
@@ -340,6 +441,7 @@ sim_outbreak_abm <- function(geography,
     recovery_day[uids] <<- day + delay_recovered + 1
     to_infectious$schedule(individual::Bitset$new(n)$insert(uids), delay = delay_infectious)
     to_recovered$schedule(individual::Bitset$new(n)$insert(uids), delay = delay_recovered)
+    if (track) due_onset <<- push(due_onset, onset_day[uids], uids)
   }
   schedule_progression(seeds, 0)
 
@@ -354,11 +456,106 @@ sim_outbreak_abm <- function(geography,
     rel
   }
 
+  # vaccinate agents today, protected from delay_to_protection days later
+  vaccinate <- function(agents, day) {
+    agents <- unique(agents[is.na(vacc_day[agents])])
+    if (length(agents) == 0) return(invisible(NULL))
+    vacc_day[agents] <<- day
+    gone <- agents[vacc_eligible[agents]]
+    vacc_eligible[gone] <<- FALSE
+    vacc_eligible_count <<- vacc_eligible_count - tabulate(location[gone], nbins = n_locations)
+    daily_doses[day + 1, ] <<- daily_doses[day + 1, ] + tabulate(location[agents], nbins = n_locations)
+    due_protection <<- push(due_protection, rep(day + ceiling(vaccination$delay_to_protection), length(agents)), agents)
+  }
+
+  # household members of the given agents
+  household_members <- function(agents) {
+    hh <- unique(household[agents])
+    members_by_household[sequence(household_count[hh], from = household_first[hh])]
+  }
+
+  # reports, tracing and vaccination due today, before transmission
+  intervene <- function(day) {
+    onset_today <- pop(due_onset, day)
+    if (length(onset_today) > 0) {
+      onset_time[onset_today] <<- day + stats::runif(length(onset_today))
+      in_quarantine <- quarantine_from[onset_today] <= day & quarantine_until[onset_today] >= day
+      quarantined_at_onset[onset_today] <<- in_quarantine
+      delay <- draw_reporting_delay(length(onset_today))
+      delay[in_quarantine] <- 0
+      report_time[onset_today] <<- onset_time[onset_today] + delay
+      due_report <<- push(due_report, floor(report_time[onset_today]), onset_today)
+    }
+
+    reported <- pop(due_report, day)
+    if (length(reported) > 0) {
+      reported_total <<- reported_total + length(reported)
+      reported_by_location <<- reported_by_location + tabulate(location[reported], nbins = n_locations)
+      gone <- reported[vacc_eligible[reported]]
+      vacc_eligible[gone] <<- FALSE
+      vacc_eligible_count <<- vacc_eligible_count - tabulate(location[gone], nbins = n_locations)
+      for (name in names(start_day)) {
+        programme <- if (name == "vaccination") vaccination else contact_tracing
+        if (is.infinite(start_day[[name]]) && !is.null(programme) && !is.null(programme$start_after_reports) &&
+            reported_total >= programme$start_after_reports) {
+          start_day[[name]] <<- day + 1
+        }
+      }
+      infected_by <- child_of[parent_of %in% reported]
+      if (day >= start_day[["contact_tracing"]]) {
+        isolated_from[reported] <<- day
+        contacts <- setdiff(c(household_members(reported), infected_by), reported)
+        contacts <- contacts[stats::runif(length(contacts)) < contact_tracing$prob_traced]
+        if (length(contacts) > 0) {
+          trace_on <- day + ceiling(contact_tracing$delay(length(contacts)))
+          due_trace <<- push(due_trace, trace_on, contacts)
+        }
+      }
+      if (day >= start_day[["vaccination"]] && vaccination$type == "ring") {
+        ring <- c(household_members(reported), infected_by)
+        if (length(infected_by) > 0) ring <- c(ring, household_members(infected_by))
+        ring <- setdiff(unique(ring), reported)
+        ring <- ring[stats::runif(length(ring)) < vaccination$coverage]
+        if (length(ring) > 0) {
+          due_vaccine <<- push(due_vaccine, day + ceiling(vaccination$delay(length(ring))), ring)
+        }
+      }
+    }
+
+    traced <- pop(due_trace, day)
+    traced <- traced[is.na(report_time[traced]) | report_time[traced] >= day + 1]
+    if (length(traced) > 0) {
+      traced_day[traced] <<- pmin(traced_day[traced], day, na.rm = TRUE)
+      quarantine_from[traced] <<- pmin(quarantine_from[traced], day)
+      quarantine_until[traced] <<- pmax(quarantine_until[traced], day + contact_tracing$quarantine_days)
+    }
+
+    vaccinate(pop(due_vaccine, day), day)
+    if (day >= start_day[["vaccination"]] && vaccination$type == "mass" && vaccination$doses_per_day > 0) {
+      affected <- which(reported_by_location > 0 & vacc_eligible_count > 0)
+      if (length(affected) > 0) {
+        doses <- integer(n_locations)
+        doses[affected] <- stats::rmultinom(1, vaccination$doses_per_day, population[affected])[, 1]
+        doses <- pmin(doses, vacc_eligible_count)
+        vaccinate(.sample_susceptible(doses, location_first, population, vacc_eligible, no_one), day)
+      }
+    }
+
+    protect <- pop(due_protection, day)
+    if (length(protect) > 0) {
+      is_protected[protect] <<- TRUE
+      newly_protected <- protect[is_susceptible[protect]]
+      susceptible_count <<- susceptible_count - tabulate(location[newly_protected], nbins = n_locations)
+      protected_susceptible <<- c(protected_susceptible, newly_protected)
+    }
+  }
+
   stopped <- FALSE
   last_day <- max_days - 1
   infection <- function(t) {
     day <- t - 1
     if (stopped) return(invisible(NULL))
+    if (track) intervene(day)
     infectious_now <- health$get_index_of("I")$to_vector()
     daily_infectious[t, ] <<- tabulate(location[infectious_now], nbins = n_locations)
     if (length(infectious_now) == 0) {
@@ -369,6 +566,12 @@ sim_outbreak_abm <- function(geography,
       return(invisible(NULL))
     }
     weight <- relative_infectiousness[infectious_now]
+    if (track && !is.null(contact_tracing)) {
+      isolated <- isolated_from[infectious_now] <= day
+      quarantined <- !isolated & quarantine_from[infectious_now] <= day & quarantine_until[infectious_now] >= day
+      weight[isolated] <- weight[isolated] * (1 - contact_tracing$isolation_reduction)
+      weight[quarantined] <- weight[quarantined] * (1 - contact_tracing$quarantine_reduction)
+    }
     household_load <- numeric(n_households)
     by_household <- rowsum(weight, household[infectious_now])
     household_load[as.integer(rownames(by_household))] <- by_household[, 1]
@@ -384,8 +587,16 @@ sim_outbreak_abm <- function(geography,
     # hazards, so they are drawn one by one
     loaded <- which(household_load > 0)
     candidates <- members_by_household[sequence(household_count[loaded], from = household_first[loaded])]
+    # vaccinated agents are less susceptible, so they are drawn one by one too
+    if (track && length(protected_susceptible) > 0) {
+      protected_susceptible <<- protected_susceptible[is_susceptible[protected_susceptible]]
+      candidates <- unique(c(candidates, protected_susceptible))
+    }
     candidates <- candidates[is_susceptible[candidates]]
     rel <- rel_location[location[candidates]]
+    if (track && !is.null(vaccination)) {
+      rel[is_protected[candidates]] <- rel[is_protected[candidates]] * (1 - vaccination$efficacy)
+    }
     h_household <- rel * household_hazard * household_load[household[candidates]]
     h_community <- rel * community_by_location[location[candidates]]
     infected_candidates <- stats::runif(length(candidates)) < 1 - exp(-(h_household + h_community))
@@ -394,9 +605,11 @@ sim_outbreak_abm <- function(geography,
     # hazard, so the number infected in each location is binomial and they
     # are a uniform sample; this gives each agent the same daily probability
     # of infection as drawing them one by one, at a cost that grows with the
-    # epidemic rather than the population
+    # epidemic rather than the population. susceptible_count excludes
+    # protected agents, who are all candidates.
     is_candidate[candidates] <<- TRUE
-    others <- susceptible_count - tabulate(location[candidates], nbins = n_locations)
+    unprotected <- if (track) candidates[!is_protected[candidates]] else candidates
+    others <- susceptible_count - tabulate(location[unprotected], nbins = n_locations)
     n_community_only <- stats::rbinom(n_locations, others, 1 - exp(-rel_location * community_by_location))
     community_only <- .sample_susceptible(
       n_community_only, location_first, population, is_susceptible, is_candidate
@@ -406,7 +619,8 @@ sim_outbreak_abm <- function(geography,
     newly <- c(candidates[infected_candidates], community_only)
     if (length(newly) > 0) {
       is_susceptible[newly] <<- FALSE
-      susceptible_count <<- susceptible_count - tabulate(location[newly], nbins = n_locations)
+      counted <- if (track) newly[!is_protected[newly]] else newly
+      susceptible_count <<- susceptible_count - tabulate(location[counted], nbins = n_locations)
       # attribute each infection to the household or the community in
       # proportion to the two hazards, then draw the infector
       share_household <- c(
@@ -428,6 +642,10 @@ sim_outbreak_abm <- function(geography,
         who[targets] <- .pick_infectors(source, infectious_now, location[infectious_now], weight)
       }
       infector[newly] <<- who
+      if (track) {
+        parent_of <<- c(parent_of, who)
+        child_of <<- c(child_of, newly)
+      }
       daily_new[t, ] <<- tabulate(location[newly], nbins = n_locations)
       health$queue_update("E", newly)
       schedule_progression(newly, day)
@@ -446,9 +664,27 @@ sim_outbreak_abm <- function(geography,
   )
 
   days_run <- seq_len(last_day + 1)
+  tracking <- if (track) {
+    list(
+      onset_time = onset_time, report_time = report_time, vacc_day = vacc_day, traced_day = traced_day,
+      contact_tracing = contact_tracing,
+      tracing_start = start_day[["contact_tracing"]]
+    )
+  }
   list(
     chain = .abm_chain(location, household, age, sex, infector, exposure_day, onset_day, recovery_day,
-                       locations$name, contacts_named, last_day),
+                       locations$name, contacts_named, last_day, tracking = tracking),
+    interventions = if (track) {
+      list(
+        start_day = start_day,
+        quarantined_at_onset = quarantined_at_onset,
+        doses = data.frame(
+          day = rep(days_run - 1, n_locations),
+          location = rep(locations$name, each = length(days_run)),
+          doses = as.vector(daily_doses[days_run, , drop = FALSE])
+        )
+      )
+    },
     daily = data.frame(
       day = rep(days_run - 1, n_locations),
       location = rep(locations$name, each = length(days_run)),
@@ -567,9 +803,15 @@ sim_outbreak_abm <- function(geography,
 #' uniform time within the day. Each case names its uninfected household
 #' members and a Poisson number of uninfected agents from its location,
 #' contacted at a uniform time in its infectious period.
+#'
+#' With `tracking` (from a run with interventions), onset and report times
+#' come from the run, and the chain gains `reporting_time`, `traced_time`,
+#' `vaccination_time` and `tracing_status`. Named community contacts of cases
+#' reported once tracing has started are traced with the tracing probability
+#' and delay.
 #' @keywords internal
 .abm_chain <- function(location, household, age, sex, infector, exposure_day, onset_day, recovery_day,
-                       location_names, contacts_named, last_day) {
+                       location_names, contacts_named, last_day, tracking = NULL) {
   is_case <- !is.na(onset_day) & onset_day <= last_day
   # each pass drops cases whose infector was dropped
   repeat {
@@ -607,12 +849,13 @@ sim_outbreak_abm <- function(geography,
   end <- recovery_day[cases][contact_of]
   contact_time <- start + stats::runif(length(contact_of)) * pmax(end - start, 1)
 
-  rbind(
+  case_time <- if (is.null(tracking)) onset_day[cases] + stats::runif(length(cases)) else tracking$onset_time[cases]
+  chain <- rbind(
     data.frame(
       id = seq_along(cases),
       infector = case_row[infector[cases]],
       infected = rep(TRUE, length(cases)),
-      time = onset_day[cases] + stats::runif(length(cases)),
+      time = case_time,
       location = location_names[location[cases]],
       age = age[cases],
       sex = sex[cases],
@@ -629,4 +872,31 @@ sim_outbreak_abm <- function(geography,
       agent = contact_agent
     )
   )
+  if (is.null(tracking)) return(chain)
+
+  n_cases <- length(cases)
+  contact_rows <- n_cases + seq_along(contact_agent)
+  chain$reporting_time <- c(tracking$report_time[cases], rep(NA_real_, length(contact_agent)))
+  chain$vaccination_time <- tracking$vacc_day[chain$agent]
+  chain$traced_time <- tracking$traced_day[chain$agent]
+  # contacts are listed for tracing only once tracing has started
+  naming_report <- tracking$report_time[cases][contact_of]
+  traced_from_start <- naming_report >= tracking$tracing_start
+  community <- seq_along(contact_agent) > length(household_agent)
+  if (!is.null(tracking$contact_tracing)) {
+    # a contact row records tracing that followed this case's report, so
+    # contacts of cases reported before tracing began have no tracing date
+    chain$traced_time[contact_rows[!traced_from_start]] <- NA_real_
+    draw <- community & traced_from_start
+    traced <- draw & stats::runif(length(contact_agent)) < tracking$contact_tracing$prob_traced
+    chain$traced_time[contact_rows[community]] <- NA_real_
+    chain$traced_time[contact_rows[traced]] <- floor(naming_report[traced]) +
+      ceiling(tracking$contact_tracing$delay(sum(traced)))
+    chain$tracing_status <- NA_character_
+    chain$tracing_status[contact_rows] <- ifelse(
+      !traced_from_start, "unknown",
+      ifelse(is.na(chain$traced_time[contact_rows]), "lost_to_followup", "under_followup")
+    )
+  }
+  chain
 }

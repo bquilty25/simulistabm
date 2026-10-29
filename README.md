@@ -42,8 +42,12 @@ outbreaks peak and end <br> :world_map: Locations with populations and a
 mobility matrix (gravity or radiation model) for community mixing <br>
 :fire: Individual variation in infectiousness, for superspreading <br>
 :construction: Interventions that reduce transmission by location and
-time <br> :link: A contacts table whose links follow the simulated
-transmission chain <br>
+time <br> :syringe: Vaccination with a leaky vaccine of known efficacy,
+as a mass campaign in affected locations or ring vaccination around
+reported cases (`vaccination()`) <br> :telephone_receiver: Case
+isolation and contact tracing with quarantine (`contact_tracing()`),
+with tracing dates and status in the contacts table <br> :link: A
+contacts table whose links follow the simulated transmission chain <br>
 
 `chain_to_outbreak()` turns a transmission chain from any model into
 `{simulist}` output, adding delays, outcomes, names, case types and
@@ -198,6 +202,41 @@ controlled <- sim_outbreak_abm(
 c(uncontrolled = nrow(uncontrolled$linelist), controlled = nrow(controlled$linelist))
 #> uncontrolled   controlled 
 #>        28301         2139
+```
+
+Vaccination and contact tracing respond to reported cases, so cases are
+reported during the simulation. Here ring vaccination with a 90%
+effective vaccine and contact tracing both start after the 30th report:
+
+``` r
+set.seed(1)
+responded <- sim_outbreak_abm(
+  geography = geography,
+  household_hazard = 0.05,
+  community_hazard = 0.3,
+  reporting_delay = function(n) rgamma(n, shape = 2, rate = 0.5),
+  vaccination = vaccination("ring", efficacy = 0.9, start_after_reports = 30, coverage = 0.8, delay = 2),
+  contact_tracing = contact_tracing(prob_traced = 0.6, delay = 2, start_after_reports = 30),
+  outbreak_size = c(50, 1e5)
+)
+nrow(responded$linelist)
+#> [1] 5101
+attr(responded, "interventions")
+#>      intervention start_date
+#> 1     vaccination 2023-01-30
+#> 2 contact_tracing 2023-01-30
+table(responded$contacts$status)
+#> 
+#>             case lost_to_followup   under_followup          unknown 
+#>             5100             7609            17421              149
+head(attr(responded, "case_interventions"))
+#>   id date_vaccination date_traced quarantined_at_onset
+#> 1  1             <NA>        <NA>                FALSE
+#> 2  2       2023-04-01  2023-04-07                FALSE
+#> 3  3             <NA>  2023-04-22                FALSE
+#> 4  4       2023-04-19        <NA>                FALSE
+#> 5  5             <NA>  2023-02-28                FALSE
+#> 6  6       2023-02-03        <NA>                FALSE
 ```
 
 The output works with the rest of the package, for example a real-time

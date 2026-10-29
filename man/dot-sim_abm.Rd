@@ -15,7 +15,10 @@
   n_seeds,
   contacts_named,
   max_days,
-  max_infections
+  max_infections,
+  vaccination = NULL,
+  contact_tracing = NULL,
+  reporting_delay = NULL
 )
 }
 \arguments{
@@ -54,6 +57,30 @@ addition to their uninfected household members.}
 
 \item{max_infections}{Stop at the end of the first day on which cumulative
 infections exceed this.}
+
+\item{vaccination}{A vaccination programme from \code{\link[=vaccination]{vaccination()}}, or \code{NULL}
+(default) for none.}
+
+\item{contact_tracing}{Case isolation and contact tracing from
+\code{\link[=contact_tracing]{contact_tracing()}}, or \code{NULL} (default) for none. With either
+\code{vaccination} or \code{contact_tracing}, cases are reported during the
+simulation (after \code{reporting_delay}, or at onset if in quarantine), so
+interventions can respond to reports.}
+
+\item{reporting_delay}{A \code{function} or an \verb{<epiparameter>} object for the
+reporting delay distribution. \code{reporting_delay} can also be \code{NULL} to not
+simulate delays from symptom onset to date of reporting, in which case the
+date of reporting will be assumed to be equal to the date of onset.
+The (random) number generating function creates delays between the
+time of symptom onset (\verb{$date_onset}) and the case being reported
+(\verb{$date_reporting}).
+
+The function can be defined or anonymous. The function must return a vector
+of \code{numeric}s for the length of the reporting delay. The function must have
+a single argument.
+
+The default is \code{NULL} so by default there is no reporting delay, and the
+\verb{$date_reporting} line list column is identical to the \verb{$date_onset} column.}
 }
 \value{
 A list with the \code{chain} (for \code{\link[=chain_to_outbreak]{chain_to_outbreak()}}), the \code{daily}
