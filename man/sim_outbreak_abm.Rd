@@ -15,6 +15,7 @@ sim_outbreak_abm(
   interventions = NULL,
   vaccination = NULL,
   contact_tracing = NULL,
+  counterfactual = FALSE,
   n_seeds = 1,
   contacts_named = 2,
   max_days = 730,
@@ -74,6 +75,12 @@ susceptibility, between 0 and 1), or \code{NULL} (default) for none.}
 \code{vaccination} or \code{contact_tracing}, cases are reported during the
 simulation (after \code{reporting_delay}, or at onset if in quarantine), so
 interventions can respond to reports.}
+
+\item{counterfactual}{A single \code{logical}: with \code{vaccination} or
+\code{contact_tracing}, also rerun the same simulation without them (default
+\code{FALSE}). Interventions draw random numbers from a separate stream, so the
+two runs are identical until the first intervention acts, and the
+difference between them is the effect of the interventions.}
 
 \item{n_seeds}{A single whole number of agents infected at the start, in
 the geography's \code{seed_location} (or a location drawn by population).}
@@ -242,6 +249,11 @@ and there are further attributes:
 vaccination, the date traced as a contact, and whether they were in
 quarantine at onset.
 \item \code{"vaccinations"}: doses given by date and location.
+\item \code{"counterfactual"} (with \code{counterfactual = TRUE}): daily infections and
+onsets with the interventions (\code{infections_with}, \code{onsets_with}) and
+without them (\code{infections_without}, \code{onsets_without}), \code{NA} after a run
+stopped. The run without interventions stops at five times the maximum
+outbreak size.
 }
 }
 \description{

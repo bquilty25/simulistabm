@@ -217,26 +217,31 @@ responded <- sim_outbreak_abm(
   reporting_delay = function(n) rgamma(n, shape = 2, rate = 0.5),
   vaccination = vaccination("ring", efficacy = 0.9, start_after_reports = 30, coverage = 0.8, delay = 2),
   contact_tracing = contact_tracing(prob_traced = 0.6, delay = 2, start_after_reports = 30),
+  counterfactual = TRUE,
   outbreak_size = c(50, 1e5)
 )
 nrow(responded$linelist)
-#> [1] 5101
+#> [1] 4959
 attr(responded, "interventions")
 #>      intervention start_date
-#> 1     vaccination 2023-01-30
-#> 2 contact_tracing 2023-01-30
+#> 1     vaccination 2023-02-02
+#> 2 contact_tracing 2023-02-02
+# the same simulation without the interventions, identical until they start
+colSums(attr(responded, "counterfactual")[c("onsets_with", "onsets_without")], na.rm = TRUE)
+#>    onsets_with onsets_without 
+#>           4959          28301
 table(responded$contacts$status)
 #> 
 #>             case lost_to_followup   under_followup          unknown 
-#>             5100             7609            17421              149
+#>             4958             7457            16872              147
 head(attr(responded, "case_interventions"))
 #>   id date_vaccination date_traced quarantined_at_onset
-#> 1  1             <NA>        <NA>                FALSE
-#> 2  2       2023-04-01  2023-04-07                FALSE
-#> 3  3             <NA>  2023-04-22                FALSE
-#> 4  4       2023-04-19        <NA>                FALSE
-#> 5  5             <NA>  2023-02-28                FALSE
-#> 6  6       2023-02-03        <NA>                FALSE
+#> 1  1       2023-04-29  2023-05-01                FALSE
+#> 2  2       2023-03-04  2023-03-04                 TRUE
+#> 3  3       2023-04-30  2023-04-30                FALSE
+#> 4  4       2023-05-31  2023-05-26                FALSE
+#> 5  5       2023-04-25  2023-04-27                 TRUE
+#> 6  6       2023-05-16        <NA>                FALSE
 ```
 
 The output works with the rest of the package, for example a real-time

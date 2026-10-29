@@ -92,6 +92,23 @@ test_that("contact tracing quarantines contacts and records tracing", {
   expect_true(all(linelist$date_reporting[quarantined] == linelist$date_onset[quarantined]))
 })
 
+test_that("the counterfactual matches until the interventions start", {
+  outbreak <- run_abm(
+    vaccination = vaccination("mass", efficacy = 0.8, start_after_reports = 30, doses_per_day = 300),
+    contact_tracing = contact_tracing(prob_traced = 0.5, delay = 2, start_after_reports = 30),
+    counterfactual = TRUE
+  )
+  plain <- run_abm()
+  cf <- attr(outbreak, "counterfactual")
+  start <- min(attr(outbreak, "interventions")$start_date)
+  before <- cf$date < start
+  expect_identical(cf$infections_with[before], cf$infections_without[before])
+  expect_lt(sum(cf$infections_with, na.rm = TRUE), sum(cf$infections_without, na.rm = TRUE))
+  # the rerun without interventions is the plain simulation
+  expect_identical(sum(cf$onsets_without, na.rm = TRUE), nrow(plain$linelist))
+  expect_null(attr(plain, "counterfactual"))
+})
+
 test_that("interventions keep the simulist structure", {
   outbreak <- run_abm(
     vaccination = vaccination("ring", efficacy = 0.9, start_after_reports = 20),
