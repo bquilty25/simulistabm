@@ -2,7 +2,9 @@
 
 First version of the fork of _simulist_ 0.7.1.9000.
 
-* New `sim_outbreak_abm()` simulates outbreaks with an agent-based model built on _individual_: agents in households within locations, SEIR progression, household and community transmission with mobility between locations, individual variation in infectiousness, location-level interventions and finite populations that deplete. It records every infector and names household and community contacts, and returns a line list and contacts table with the same structure as `sim_outbreak()`, plus the daily series of infections by location.
+* New `sim_outbreak_abm()` simulates outbreaks with an agent-based model built on _individual_: agents in households within locations, SEIR progression, household and community transmission with mobility between locations, individual variation in infectiousness, location-level interventions and finite populations that deplete. It records every infector and names household and community contacts, and returns a line list and contacts table with the same structure as `sim_outbreak()`, plus the daily series of infections by location. The line list is ordered by onset date.
+
+* The README describes the fork, with installation from GitHub and a quick start for `sim_outbreak_abm()`.
 
 # simulist (development version, as forked)
 
