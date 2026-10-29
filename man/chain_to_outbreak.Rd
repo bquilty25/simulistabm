@@ -33,6 +33,13 @@ this individual, or \code{NA} for index cases. Must refer to an infected row.
 \item \code{time}: non-negative \code{numeric} time in days, as described in Details.
 \item Optional \code{location} (\code{character}), \code{age} (whole numbers) and \code{sex}
 (\code{"m"} or \code{"f"}).
+\item Optional \code{reporting_time}: time each infected individual was reported,
+used instead of drawing \code{reporting_delay}.
+\item Optional \code{traced_time} and \code{vaccination_time}: time each individual was
+traced or vaccinated (\code{NA} if never), added to the contacts table as
+\code{date_traced} and \code{date_vaccination}.
+\item Optional \code{tracing_status}: the contact tracing status of contacts who were
+not infected, used instead of drawing from \code{contact_tracing_status_probs}.
 }}
 
 \item{onset_to_hosp}{A \code{function} or an \verb{<epiparameter>} object for the
@@ -171,7 +178,9 @@ Ct values. See \code{\link[=create_config]{create_config()}} for more informatio
 A list with a line list \verb{<data.frame>} and a contacts
 \verb{<data.frame>}, with the same columns as \code{\link[=sim_outbreak]{sim_outbreak()}}, plus \code{location}
 in the line list and \code{from_location} and \code{to_location} in the contacts
-table when the chain has a \code{location} column.
+table when the chain has a \code{location} column, and \code{date_traced} and
+\code{date_vaccination} in the contacts table when it has \code{traced_time} and
+\code{vaccination_time}.
 }
 \description{
 \code{\link[=sim_outbreak]{sim_outbreak()}} simulates a transmission chain with a

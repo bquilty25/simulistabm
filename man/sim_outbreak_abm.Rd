@@ -13,6 +13,8 @@ sim_outbreak_abm(
   infectiousness = function(n) stats::rgamma(n = n, shape = 1, rate = 1),
   household_size = function(n) 1L + stats::rpois(n = n, lambda = 3.5),
   interventions = NULL,
+  vaccination = NULL,
+  contact_tracing = NULL,
   n_seeds = 1,
   contacts_named = 2,
   max_days = 730,
@@ -63,6 +65,15 @@ many household sizes (whole numbers of at least 1).}
 name, or \code{"all"}), \code{start} and \code{end} (days since the start of the outbreak;
 \code{end} can be \code{Inf}) and \code{reduction} (proportional reduction in
 susceptibility, between 0 and 1), or \code{NULL} (default) for none.}
+
+\item{vaccination}{A vaccination programme from \code{\link[=vaccination]{vaccination()}}, or \code{NULL}
+(default) for none.}
+
+\item{contact_tracing}{Case isolation and contact tracing from
+\code{\link[=contact_tracing]{contact_tracing()}}, or \code{NULL} (default) for none. With either
+\code{vaccination} or \code{contact_tracing}, cases are reported during the
+simulation (after \code{reporting_delay}, or at onset if in quarantine), so
+interventions can respond to reports.}
 
 \item{n_seeds}{A single whole number of agents infected at the start, in
 the geography's \code{seed_location} (or a location drawn by population).}
@@ -219,6 +230,18 @@ attributes:
 date and location.
 \item \code{"complete_until"}: the last date with complete onsets.
 \item \code{"attempts"}: the number of simulations run to reach the minimum size.
+}
+
+With \code{vaccination} or \code{contact_tracing}, the contacts table gains
+\code{date_traced} and \code{date_vaccination} columns, its \code{status} comes from
+tracing (\code{"unknown"} for contacts of cases reported before tracing began),
+and there are further attributes:
+\itemize{
+\item \code{"interventions"}: the date each intervention started.
+\item \code{"case_interventions"}: for each case \code{id} in the line list, the date of
+vaccination, the date traced as a contact, and whether they were in
+quarantine at onset.
+\item \code{"vaccinations"}: doses given by date and location.
 }
 }
 \description{

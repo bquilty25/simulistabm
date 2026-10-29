@@ -32,12 +32,21 @@
 #' * `time`: non-negative `numeric` time in days, as described in Details.
 #' * Optional `location` (`character`), `age` (whole numbers) and `sex`
 #'   (`"m"` or `"f"`).
+#' * Optional `reporting_time`: time each infected individual was reported,
+#'   used instead of drawing `reporting_delay`.
+#' * Optional `traced_time` and `vaccination_time`: time each individual was
+#'   traced or vaccinated (`NA` if never), added to the contacts table as
+#'   `date_traced` and `date_vaccination`.
+#' * Optional `tracing_status`: the contact tracing status of contacts who were
+#'   not infected, used instead of drawing from `contact_tracing_status_probs`.
 #' @inheritParams sim_outbreak
 #'
 #' @return A list with a line list `<data.frame>` and a contacts
 #' `<data.frame>`, with the same columns as [sim_outbreak()], plus `location`
 #' in the line list and `from_location` and `to_location` in the contacts
-#' table when the chain has a `location` column.
+#' table when the chain has a `location` column, and `date_traced` and
+#' `date_vaccination` in the contacts table when it has `traced_time` and
+#' `vaccination_time`.
 #' @export
 #'
 #' @examples
@@ -202,6 +211,20 @@ chain_to_outbreak <- function(chain,
   }
   if ("sex" %in% colnames(chain)) {
     checkmate::assert_subset(chain$sex, c("m", "f"))
+  }
+  if ("reporting_time" %in% colnames(chain)) {
+    checkmate::assert_numeric(chain$reporting_time, lower = 0)
+    stopifnot(
+      "`reporting_time` must be given for every infected row, no earlier than `time`" =
+        all(!is.na(chain$reporting_time[infected])) &&
+        all(chain$reporting_time[infected] >= chain$time[infected])
+    )
+  }
+  for (col in intersect(c("traced_time", "vaccination_time"), colnames(chain))) {
+    checkmate::assert_numeric(chain[[col]], lower = 0, .var.name = col)
+  }
+  if ("tracing_status" %in% colnames(chain)) {
+    checkmate::assert_subset(stats::na.omit(chain$tracing_status), c("under_followup", "lost_to_followup", "unknown"))
   }
 
   chain$id <- as.integer(chain$id)

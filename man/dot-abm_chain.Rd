@@ -15,7 +15,8 @@
   recovery_day,
   location_names,
   contacts_named,
-  last_day
+  last_day,
+  tracking = NULL
 )
 }
 \description{
@@ -24,5 +25,12 @@ back to a seed are cases; onset is the start of infectiousness, with a
 uniform time within the day. Each case names its uninfected household
 members and a Poisson number of uninfected agents from its location,
 contacted at a uniform time in its infectious period.
+}
+\details{
+With \code{tracking} (from a run with interventions), onset and report times
+come from the run, and the chain gains \code{reporting_time}, \code{traced_time},
+\code{vaccination_time} and \code{tracing_status}. Named community contacts of cases
+reported once tracing has started are traced with the tracing probability
+and delay.
 }
 \keyword{internal}

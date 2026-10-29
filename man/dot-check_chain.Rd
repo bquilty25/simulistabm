@@ -17,6 +17,13 @@ this individual, or \code{NA} for index cases. Must refer to an infected row.
 \item \code{time}: non-negative \code{numeric} time in days, as described in Details.
 \item Optional \code{location} (\code{character}), \code{age} (whole numbers) and \code{sex}
 (\code{"m"} or \code{"f"}).
+\item Optional \code{reporting_time}: time each infected individual was reported,
+used instead of drawing \code{reporting_delay}.
+\item Optional \code{traced_time} and \code{vaccination_time}: time each individual was
+traced or vaccinated (\code{NA} if never), added to the contacts table as
+\code{date_traced} and \code{date_vaccination}.
+\item Optional \code{tracing_status}: the contact tracing status of contacts who were
+not infected, used instead of drawing from \code{contact_tracing_status_probs}.
 }}
 }
 \value{
